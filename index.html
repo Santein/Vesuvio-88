@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Outrun Drive — Three.js Showcase</title>
+    <title>VESUVIO 88 — Three.js Showcase</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -149,9 +149,24 @@
 
       .status-row {
         display: flex;
-        gap: 8px;
-        margin-top: 9px;
+        gap: 7px;
+        margin-top: 8px;
         align-items: center;
+      }
+      .pip-icon {
+        font-size: 10px;
+        line-height: 1;
+        width: 11px;
+        text-align: center;
+        opacity: 0.75;
+      }
+      .life-icon {
+        color: #ff4d6d;
+        text-shadow: 0 0 8px rgba(255, 77, 109, 0.8);
+      }
+      .fusion-icon {
+        color: var(--palm-azure);
+        text-shadow: 0 0 8px rgba(53, 208, 255, 0.8);
       }
       .pips {
         display: flex;
@@ -515,6 +530,24 @@
         transform: translate(-50%, -50%) scale(1) skewX(-6deg);
       }
 
+      #life-banner {
+        top: 38%;
+        transform: translate(-50%, -50%) scale(0.85) skewX(-6deg);
+        font-size: clamp(22px, 4.2vw, 40px);
+        letter-spacing: 0.14em;
+        color: #ffffff;
+        text-shadow:
+          0 0 18px rgba(255, 90, 120, 0.95),
+          0 0 42px rgba(255, 90, 120, 0.55);
+        transition:
+          opacity 0.18s ease,
+          transform 0.3s ease;
+      }
+      #life-banner.show {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1) skewX(-6deg);
+      }
+
       /* ---------- Gamepad toast ---------- */
       #pad-toast {
         position: fixed;
@@ -787,13 +820,17 @@
         <div class="hud-unit" id="mph-value">km/h · 0 mph</div>
         <div id="speed-bar"><div id="speed-bar-fill"></div></div>
         <div class="status-row">
+          <span class="pip-icon life-icon">♥</span>
           <div class="pips" id="lives-value">
-            <span class="pip life" data-life="1"></span><span class="pip life" data-life="2"></span
-            ><span class="pip life" data-life="3"></span>
+            <span class="pip life"></span><span class="pip life"></span><span class="pip life"></span
+            ><span class="pip life lost"></span><span class="pip life lost"></span><span class="pip life lost"></span>
           </div>
+        </div>
+        <div class="status-row">
+          <span class="pip-icon fusion-icon">⚛</span>
           <div class="pips" id="fusion-value">
-            <span class="pip fusion empty" data-slot="1"></span><span class="pip fusion empty" data-slot="2"></span
-            ><span class="pip fusion empty" data-slot="3"></span>
+            <span class="pip fusion empty"></span><span class="pip fusion empty"></span
+            ><span class="pip fusion empty"></span>
           </div>
         </div>
       </div>
@@ -807,7 +844,7 @@
     </div>
 
     <div id="hint">
-      <b>◄ ►</b> sterza · <b>▼</b> frena · <b>MAIUSC</b> derapa · <b>SPAZIO</b> Mr. Fusion · gamepad supportato
+      <b>◄ ►</b> sterza · <b>▼</b> frena · <b>MAIUSC + ◄ ►</b> derapa · <b>SPAZIO</b> Mr. Fusion · gamepad supportato
     </div>
 
     <div id="invuln-banner" class="banner">🍕 INVULNERABILE · 10.0s</div>
@@ -815,6 +852,7 @@
       ⚡ 88 MPH — SALTO TEMPORALE ⚡<span class="tj-sub">+20 M NEL FUTURO</span>
     </div>
     <div id="fusion-banner" class="banner">⚛ MR. FUSION</div>
+    <div id="life-banner" class="banner">🥤 +1 VITA</div>
 
     <div id="crash-flash"></div>
     <div id="pizza-flash"></div>
@@ -864,7 +902,7 @@
     </div>
 
     <div id="center-overlay" class="overlay-screen">
-      <h1>OUTRUN DRIVE</h1>
+      <h1>VESUVIO 88</h1>
       <div class="subtitle" id="start-subtitle">GOLFO DI NAPOLI · 1985</div>
       <p id="start-desc">
         Corsa infinita al tramonto. Raccogli l'uva per fare combo, la pizza ti rende invulnerabile,
@@ -1183,6 +1221,12 @@
             tone({ freq: 160, glideTo: 340, dur: 0.3, type: "sawtooth", gain: 0.14, delay: 0.05 });
             tone({ freq: 700, dur: 0.14, type: "sine", gain: 0.18, delay: 0.3 });
             tone({ freq: 1050, dur: 0.2, type: "sine", gain: 0.15, delay: 0.4 });
+          },
+          playExtraLife() {
+            // warm ascending 1-up style flourish
+            [523, 659, 784, 1047].forEach((f, i) =>
+              tone({ freq: f, dur: 0.13, type: "square", gain: 0.16, delay: i * 0.06 }),
+            );
           },
           playBoost() {
             // NOS-style ignition whoosh
@@ -1755,6 +1799,69 @@
         m.collected = false;
       }
 
+      // ---------- Soda can: rare pickup worth one extra life ----------
+      // Cola-style livery: deep blue body, a white band across the middle with a
+      // red cap above it, aluminium rims top and bottom.
+      function makeSodaCan() {
+        const group = new THREE.Group();
+        const rimMat = new THREE.MeshStandardMaterial({ color: 0xcfd6dd, metalness: 0.9, roughness: 0.3 });
+        const blueMat = new THREE.MeshStandardMaterial({
+          color: 0x1049b8,
+          emissive: 0x0b2f7a,
+          emissiveIntensity: 0.45,
+          roughness: 0.35,
+          metalness: 0.35,
+        });
+        const whiteMat = new THREE.MeshStandardMaterial({
+          color: 0xf4f7fb,
+          emissive: 0xbcd0ee,
+          emissiveIntensity: 0.4,
+          roughness: 0.35,
+        });
+        const redMat = new THREE.MeshStandardMaterial({
+          color: 0xe0182d,
+          emissive: 0xa00d1e,
+          emissiveIntensity: 0.5,
+          roughness: 0.35,
+        });
+
+        const R = 0.19;
+        const parts = [
+          [rimMat, 0.04, 0.02], // base rim
+          [blueMat, 0.2, 0.14], // lower blue
+          [whiteMat, 0.1, 0.29], // white band
+          [redMat, 0.16, 0.42], // red upper
+          [rimMat, 0.05, 0.52], // top rim
+        ];
+        for (const [mat, h, y] of parts) {
+          const seg = new THREE.Mesh(new THREE.CylinderGeometry(R, R, h, 14), mat);
+          seg.position.y = y + h / 2;
+          group.add(seg);
+        }
+
+        const tab = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.014, 6, 10), rimMat);
+        tab.rotation.x = Math.PI / 2;
+        tab.position.y = 0.575;
+        group.add(tab);
+
+        return group;
+      }
+
+      const SODA_COUNT = 1;
+      const sodas = [];
+      for (let i = 0; i < SODA_COUNT; i++) {
+        const mesh = makeSodaCan();
+        mesh.position.set(0, 0, SPAWN_FAR - 240);
+        scene.add(mesh);
+        sodas.push({ mesh, collected: false, lateralOffset: randomLaneOffset(), baseY: 0 });
+      }
+      function resetSoda(c, z) {
+        c.lateralOffset = randomLaneOffset();
+        c.mesh.position.z = z;
+        c.mesh.visible = true;
+        c.collected = false;
+      }
+
       // ---------- Traffic: slower rival cars sharing the road (collidable) ----------
       const trafficBodyGeo = new THREE.BoxGeometry(1.5, 0.55, 3.0);
       const trafficCabinGeo = new THREE.BoxGeometry(1.05, 0.45, 1.3);
@@ -2171,16 +2278,17 @@
           speed: "VELOCITÀ",
           score: "PUNTEGGIO",
           subtitle: "GOLFO DI NAPOLI · 1985",
-          desc: "Corsa infinita al tramonto. Raccogli l'uva per fare combo, la pizza ti rende invulnerabile, Mr. Fusion ti spinge a +50 km/h. A 88 mph… salto temporale.",
+          desc: "Corsa infinita al tramonto. Raccogli l'uva per fare combo, la pizza ti rende invulnerabile, la lattina vale una vita extra, Mr. Fusion ti spinge a +50 km/h. A 88 mph… salto temporale.",
           loading: "CARICAMENTO DELOREAN…",
           pressStart: "PREMI ENTER O TOCCA LO SCHERMO PER PARTIRE",
           gameOver: "GAME OVER",
           retry: "ENTER · SPAZIO · START PER RIPROVARE",
-          hint: "<b>◄ ►</b> sterza · <b>▼</b> frena · <b>MAIUSC</b> derapa · <b>SPAZIO</b> Mr. Fusion · gamepad supportato",
+          hint: "<b>◄ ►</b> sterza · <b>▼</b> frena · <b>MAIUSC + ◄ ►</b> derapa · <b>SPAZIO</b> Mr. Fusion · gamepad supportato",
           padConnected: "🎮 GAMEPAD COLLEGATO",
           timeJump: "⚡ 88 MPH — SALTO TEMPORALE ⚡",
           timeJumpSub: "+20 M NEL FUTURO",
           fusion: "⚛ MR. FUSION",
+          extraLife: "🥤 +1 VITA",
           settings: "IMPOSTAZIONI",
           language: "LINGUA",
           music: "MUSICA",
@@ -2196,16 +2304,17 @@
           speed: "SPEED",
           score: "SCORE",
           subtitle: "GULF OF NAPLES · 1985",
-          desc: "An endless sunset run. Grab grapes to build combos, pizza makes you invincible, Mr. Fusion pushes you +50 km/h. At 88 mph… time jump.",
+          desc: "An endless sunset run. Grab grapes to build combos, pizza makes you invincible, a soda can is an extra life, Mr. Fusion pushes you +50 km/h. At 88 mph… time jump.",
           loading: "LOADING DELOREAN…",
           pressStart: "PRESS ENTER OR TAP THE SCREEN TO START",
           gameOver: "GAME OVER",
           retry: "ENTER · SPACE · START TO RETRY",
-          hint: "<b>◄ ►</b> steer · <b>▼</b> brake · <b>SHIFT</b> drift · <b>SPACE</b> Mr. Fusion · gamepad supported",
+          hint: "<b>◄ ►</b> steer · <b>▼</b> brake · <b>SHIFT + ◄ ►</b> drift · <b>SPACE</b> Mr. Fusion · gamepad supported",
           padConnected: "🎮 GAMEPAD CONNECTED",
           timeJump: "⚡ 88 MPH — TIME JUMP ⚡",
           timeJumpSub: "+20 M INTO THE FUTURE",
           fusion: "⚛ MR. FUSION",
+          extraLife: "🥤 +1 LIFE",
           settings: "SETTINGS",
           language: "LANGUAGE",
           music: "MUSIC",
@@ -2242,6 +2351,7 @@
       const timejumpFlashEl = document.getElementById("timejump-flash");
       const timejumpBannerEl = document.getElementById("timejump-banner");
       const fusionBannerEl = document.getElementById("fusion-banner");
+      const lifeBannerEl = document.getElementById("life-banner");
       const boostFlashEl = document.getElementById("boost-flash");
       const heartEls = Array.from(document.querySelectorAll("#lives-value .pip"));
       const fusionSlotEls = Array.from(document.querySelectorAll("#fusion-value .pip"));
@@ -2337,6 +2447,7 @@
         document.getElementById("gameover-blink").textContent = t("retry");
         document.getElementById("pad-toast").textContent = t("padConnected");
         document.getElementById("fusion-banner").textContent = t("fusion");
+        document.getElementById("life-banner").textContent = t("extraLife");
         timejumpBannerEl.innerHTML = `${t("timeJump")}<span class="tj-sub">${t("timeJumpSub")}</span>`;
         document.getElementById("set-title").textContent = t("settings");
         document.getElementById("set-lang-label").textContent = t("language");
@@ -2408,6 +2519,8 @@
       });
 
       // ---------- Game state ----------
+      const START_LIVES = 3;
+      const MAX_LIVES = 6; // soda cans can top you up beyond the starting three
       let speed = 0; // world units / second
       let carX = 0;
       let distance = 0;
@@ -2415,7 +2528,7 @@
       let crashShake = 0;
       let crashCooldown = 0;
       let invulnerable = 0; // seconds of pizza-powered invulnerability remaining
-      let lives = 3;
+      let lives = START_LIVES;
       let combo = 0;
       let gameOver = false;
       let hasTimeJumped = false; // guards re-triggering the 88mph flash mid-boost
@@ -2496,7 +2609,7 @@
         crashShake = 0;
         crashCooldown = 0;
         invulnerable = 0;
-        lives = 3;
+        lives = START_LIVES;
         combo = 0;
         hasTimeJumped = false;
         prevSpeed = 0;
@@ -2528,6 +2641,7 @@
         fusionStock = 0;
         updateFusionHUD();
         fusions.forEach((m, i) => resetFusion(m, SPAWN_FAR - 180 - i * 100));
+        sodas.forEach((c, i) => resetSoda(c, SPAWN_FAR - 240 - i * 120));
       }
       updateLivesHUD();
       applyLanguage(); // safe here: the game-state counters it reads now exist
@@ -2787,6 +2901,33 @@
             }
             if (m.mesh.position.z > PASS_BEHIND) {
               resetFusion(m, SPAWN_FAR - 150 - Math.random() * 350);
+            }
+          }
+
+          // scroll + collect soda cans (+1 life, ignored when already at max)
+          for (const c of sodas) {
+            c.mesh.position.z += speed * dt;
+            const ahead = distanceAhead(c.mesh.position.z);
+            c.mesh.position.x = roadCurveX(ahead) + c.lateralOffset;
+            c.mesh.position.y = c.baseY + roadCurveY(ahead);
+            if (!c.collected) {
+              c.mesh.rotation.y += dt * 1.4;
+              if (
+                lives < MAX_LIVES &&
+                Math.abs(c.mesh.position.z - CAR_Z) < 1.1 &&
+                Math.abs(c.mesh.position.x - car.position.x) < 1.25
+              ) {
+                c.collected = true;
+                c.mesh.visible = false;
+                lives += 1;
+                updateLivesHUD();
+                lifeBannerEl.classList.add("show");
+                setTimeout(() => lifeBannerEl.classList.remove("show"), 1200);
+                Sound.playExtraLife();
+              }
+            }
+            if (c.mesh.position.z > PASS_BEHIND) {
+              resetSoda(c, SPAWN_FAR - 200 - Math.random() * 400);
             }
           }
 
