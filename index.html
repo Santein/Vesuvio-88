@@ -548,6 +548,47 @@
         transform: translate(-50%, -50%) scale(1) skewX(-6deg);
       }
 
+      /* ---------- Invincibility countdown ---------- */
+      #invuln-countdown {
+        position: fixed;
+        top: 46%;
+        left: 50%;
+        transform: translate(-50%, -50%) skewX(-6deg);
+        font-family: var(--font-display);
+        font-size: clamp(60px, 13vw, 130px);
+        font-weight: 900;
+        line-height: 1;
+        color: #fff6d8;
+        text-shadow:
+          0 0 26px rgba(255, 200, 80, 0.95),
+          0 0 60px rgba(255, 140, 40, 0.6);
+        z-index: 14;
+        opacity: 0;
+        pointer-events: none;
+      }
+      /* re-triggered per tick, so each number lands with its own pulse */
+      #invuln-countdown.tick {
+        animation: countdownPulse 0.95s ease-out;
+      }
+      @keyframes countdownPulse {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -50%) skewX(-6deg) scale(1.9);
+        }
+        18% {
+          opacity: 1;
+          transform: translate(-50%, -50%) skewX(-6deg) scale(1);
+        }
+        70% {
+          opacity: 0.9;
+          transform: translate(-50%, -50%) skewX(-6deg) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -50%) skewX(-6deg) scale(0.82);
+        }
+      }
+
       /* ---------- Gamepad toast ---------- */
       #pad-toast {
         position: fixed;
@@ -719,10 +760,33 @@
         text-align: right;
         font-variant-numeric: tabular-nums;
       }
-      #memorial {
+      #author {
         margin-top: 20px;
         padding-top: 15px;
         border-top: 1px solid rgba(120, 200, 255, 0.14);
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-align: center;
+        color: rgba(215, 233, 255, 0.6);
+      }
+      #author a {
+        color: var(--palm-azure);
+        text-decoration: none;
+        border-bottom: 1px solid rgba(53, 208, 255, 0.4);
+        padding-bottom: 1px;
+        transition:
+          color 0.18s ease,
+          text-shadow 0.18s ease;
+      }
+      #author a:hover {
+        color: #9fe9ff;
+        text-shadow: 0 0 12px rgba(53, 208, 255, 0.9);
+      }
+
+      #memorial {
+        margin-top: 12px;
         font-family: var(--font-ui);
         font-size: 11.5px;
         font-style: italic;
@@ -853,6 +917,7 @@
     </div>
     <div id="fusion-banner" class="banner">⚛ MR. FUSION</div>
     <div id="life-banner" class="banner">🥤 +1 VITA</div>
+    <div id="invuln-countdown"></div>
 
     <div id="crash-flash"></div>
     <div id="pizza-flash"></div>
@@ -892,6 +957,9 @@
 
         <button id="settings-close">CHIUDI</button>
 
+        <div id="author">
+          Made by <a href="https://linktr.ee/santo.gaglione" target="_blank" rel="noopener noreferrer">Santein</a>
+        </div>
         <div id="memorial">In loving memory of Kesama, Caballeros Studio</div>
         <div id="credits">
           DMC DeLorean model by
@@ -975,6 +1043,10 @@
       function roadCurveY(aheadDist) {
         return Math.sin(aheadDist * 0.016 + 1.0) * 1.3 + Math.sin(aheadDist * 0.006) * 0.8;
       }
+      // ---------- Easing ----------
+      const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);
+      const easeInOutCubic = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+
       // dX/dDistance — how far the road slides sideways per metre travelled
       function roadSlope(aheadDist) {
         return (roadCurveX(aheadDist + 2) - roadCurveX(aheadDist - 2)) / 4;
@@ -1227,6 +1299,11 @@
             [523, 659, 784, 1047].forEach((f, i) =>
               tone({ freq: f, dur: 0.13, type: "square", gain: 0.16, delay: i * 0.06 }),
             );
+          },
+          playCountdownTick(n) {
+            // higher and sharper as the timer runs down: 3 -> 2 -> 1
+            const freq = n === 1 ? 1100 : n === 2 ? 900 : 760;
+            tone({ freq, dur: n === 1 ? 0.3 : 0.16, type: "square", gain: 0.17 });
           },
           playBoost() {
             // NOS-style ignition whoosh
@@ -2289,6 +2366,7 @@
           timeJumpSub: "+20 M NEL FUTURO",
           fusion: "⚛ MR. FUSION",
           extraLife: "🥤 +1 VITA",
+          madeBy: "Creato da",
           settings: "IMPOSTAZIONI",
           language: "LINGUA",
           music: "MUSICA",
@@ -2315,6 +2393,7 @@
           timeJumpSub: "+20 M INTO THE FUTURE",
           fusion: "⚛ MR. FUSION",
           extraLife: "🥤 +1 LIFE",
+          madeBy: "Made by",
           settings: "SETTINGS",
           language: "LANGUAGE",
           music: "MUSIC",
@@ -2348,6 +2427,8 @@
       const crashFlashEl = document.getElementById("crash-flash");
       const pizzaFlashEl = document.getElementById("pizza-flash");
       const invulnBannerEl = document.getElementById("invuln-banner");
+      const invulnCountdownEl = document.getElementById("invuln-countdown");
+      let lastCountdownTick = 0; // last whole second shown, so each digit fires once
       const timejumpFlashEl = document.getElementById("timejump-flash");
       const timejumpBannerEl = document.getElementById("timejump-banner");
       const fusionBannerEl = document.getElementById("fusion-banner");
@@ -2448,6 +2529,8 @@
         document.getElementById("pad-toast").textContent = t("padConnected");
         document.getElementById("fusion-banner").textContent = t("fusion");
         document.getElementById("life-banner").textContent = t("extraLife");
+        document.getElementById("author").innerHTML =
+          `${t("madeBy")} <a href="https://linktr.ee/santo.gaglione" target="_blank" rel="noopener noreferrer">Santein</a>`;
         timejumpBannerEl.innerHTML = `${t("timeJump")}<span class="tj-sub">${t("timeJumpSub")}</span>`;
         document.getElementById("set-title").textContent = t("settings");
         document.getElementById("set-lang-label").textContent = t("language");
@@ -2535,6 +2618,13 @@
       let prevSpeed = 0; // previous frame's speed, for rising-edge 88mph detection
       let timeJumpFovBoost = 0;
       let timeJumpBloomBoost = 0;
+      // Eased attack/release envelope for the jump's camera punch, so the FOV and
+      // bloom swell and settle smoothly instead of snapping on and ramping off.
+      let timeJumpFxT = -1; // seconds since the burst cue, <0 = idle
+      const TJ_ATTACK = 0.16;
+      const TJ_RELEASE = 0.85;
+      const TJ_FOV_PEAK = 16;
+      const TJ_BLOOM_PEAK = 0.35;
       let flameTrailTimer = 0; // seconds of fire-trail left at the start of a run
       let flameSpawnAccum = 0; // meters travelled since the last flame pair
       let timeJumpSeq = -1; // <0 idle, else seconds elapsed in the jump FX sequence
@@ -2615,6 +2705,7 @@
         prevSpeed = 0;
         timeJumpFovBoost = 0;
         timeJumpBloomBoost = 0;
+        timeJumpFxT = -1;
         flameTrailTimer = 0;
         flameSpawnAccum = 0;
         flames.forEach((f) => {
@@ -2706,8 +2797,23 @@
             hasTimeJumped = false;
           }
           prevSpeed = speed;
-          timeJumpFovBoost = Math.max(0, timeJumpFovBoost - dt * 28);
-          timeJumpBloomBoost = Math.max(0, timeJumpBloomBoost - dt * 0.8);
+          // eased swell-and-settle for the jump's camera punch
+          if (timeJumpFxT >= 0) {
+            timeJumpFxT += dt;
+            let env;
+            if (timeJumpFxT < TJ_ATTACK) {
+              env = easeOutCubic(timeJumpFxT / TJ_ATTACK); // swell in
+            } else {
+              const r = (timeJumpFxT - TJ_ATTACK) / TJ_RELEASE;
+              env = r >= 1 ? 0 : 1 - easeInOutCubic(r); // settle out
+            }
+            timeJumpFovBoost = env * TJ_FOV_PEAK;
+            timeJumpBloomBoost = env * TJ_BLOOM_PEAK;
+            if (timeJumpFxT > TJ_ATTACK + TJ_RELEASE) timeJumpFxT = -1;
+          } else {
+            timeJumpFovBoost = 0;
+            timeJumpBloomBoost = 0;
+          }
 
           // Salto Temporale sequence, in movie order:
           // [0, 0.75s]  arcs crackle around the hull, intensity building (Salto 1)
@@ -2732,8 +2838,7 @@
               setTimeout(() => timejumpFlashEl.classList.remove("show"), 220);
               timejumpBannerEl.classList.add("show");
               setTimeout(() => timejumpBannerEl.classList.remove("show"), 1400);
-              timeJumpFovBoost = 16;
-              timeJumpBloomBoost = 0.35;
+              timeJumpFxT = 0; // start the eased camera envelope
               flameTrailTimer = 5; // the jump relights the BTTF fire tracks
               flameSpawnAccum = 0;
               burstSprite.visible = true;
@@ -2741,9 +2846,15 @@
             }
             if (burstSprite.visible) {
               const burstT = Math.min(1, (timeJumpSeq - 0.28) / 0.8);
-              const burstScale = 1.5 + burstT * 9;
+              // expand fast then ease to a stop, and fade with smooth ends so the
+              // flare has no visible kink partway through
+              const burstScale = 1.5 + easeOutCubic(burstT) * 9;
               burstSprite.scale.set(burstScale * 1.5, burstScale, 1);
-              burstSprite.material.opacity = burstT < 0.25 ? burstT / 0.25 : 1 - (burstT - 0.25) / 0.75;
+              const fade =
+                burstT < 0.22
+                  ? easeOutCubic(burstT / 0.22)
+                  : 1 - easeInOutCubic((burstT - 0.22) / 0.78);
+              burstSprite.material.opacity = Math.max(0, fade);
               if (burstT >= 1) burstSprite.visible = false;
             }
             if (timeJumpSeq > 1.2) {
@@ -2866,7 +2977,8 @@
               if (Math.abs(p.mesh.position.z - CAR_Z) < 1.1 && Math.abs(p.mesh.position.x - car.position.x) < 1.25) {
                 p.collected = true;
                 p.mesh.visible = false;
-                invulnerable = 10;
+                // stacking: a fresh pizza grants 10s, one taken mid-effect adds 5s
+                invulnerable = invulnerable > 0 ? invulnerable + 5 : 10;
                 pizzaFlashEl.classList.add("show");
                 setTimeout(() => pizzaFlashEl.classList.remove("show"), 180);
                 Sound.playPizza();
@@ -2973,6 +3085,17 @@
             car.scale.setScalar(1 + Math.sin(clock.getElapsedTime() * 18) * 0.03);
             invulnBannerEl.classList.add("show");
             invulnBannerEl.textContent = t("invuln")(invulnerable.toFixed(1));
+
+            // final three seconds: flash 3 - 2 - 1, one pulse per whole second
+            const secondsLeft = Math.ceil(invulnerable);
+            if (secondsLeft <= 3 && secondsLeft >= 1 && secondsLeft !== lastCountdownTick) {
+              lastCountdownTick = secondsLeft;
+              invulnCountdownEl.textContent = String(secondsLeft);
+              invulnCountdownEl.classList.remove("tick");
+              void invulnCountdownEl.offsetWidth; // restart the animation
+              invulnCountdownEl.classList.add("tick");
+              Sound.playCountdownTick(secondsLeft);
+            }
           } else {
             for (const entry of carMaterials) {
               entry.material.emissive.copy(entry.originalEmissive);
@@ -2980,6 +3103,7 @@
             }
             car.scale.setScalar(1);
             invulnBannerEl.classList.remove("show");
+            lastCountdownTick = 0;
           }
 
           // car visual feedback: bank into turns, subtle bounce, wheel spin
@@ -3032,6 +3156,7 @@
         requestAnimationFrame(animate);
       }
       animate();
+
     </script>
   </body>
 </html>

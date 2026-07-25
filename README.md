@@ -24,6 +24,7 @@ Touch controls appear automatically on phones and tablets.
 - Procedurally curved, rolling road with centrifugal cornering
 - Rival traffic, obstacles, grape combos, pizza invincibility power-up
 - Soda cans grant an extra life, up to a maximum of six
+- Pizza stacks: 10s fresh, +5s if taken while already invincible, with a 3-2-1 countdown
 - Collectible Mr. Fusion reactors (hold up to 3) used as a NOS-style boost
 - 88 mph "Salto Temporale" — Back to the Future style time jump with a +20 m skip
 - Fully procedural audio (Web Audio API): engine, tyre scrub, three synthwave tracks
@@ -49,5 +50,7 @@ Then open <http://localhost:8000/>.
 - Fonts: [Orbitron](https://fonts.google.com/specimen/Orbitron) and
   [Rajdhani](https://fonts.google.com/specimen/Rajdhani) via Google Fonts.
 - Three.js loaded from the unpkg CDN.
+
+Made by [Santein](https://linktr.ee/santo.gaglione).
 
 *In loving memory of Kesama, Caballeros Studio.*
