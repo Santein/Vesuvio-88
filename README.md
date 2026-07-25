@@ -4,7 +4,7 @@ An endless synthwave racer set on the Gulf of Naples at sunset, built with
 [Three.js](https://threejs.org/). Drive a DeLorean past Mount Vesuvius, collect
 grapes for combos, grab a pizza for invincibility, and hit 88 mph for a time jump.
 
-**▶️ Play: https://USERNAME.github.io/vesuvio-88/**
+**▶️ Play: https://Santein.github.io/Vesuvio-88/**
 
 ## Controls
 
