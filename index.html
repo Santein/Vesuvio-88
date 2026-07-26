@@ -277,6 +277,47 @@
         box-shadow: 0 0 8px rgba(255, 224, 102, 0.9);
       }
 
+      .floater {
+        position: fixed;
+        left: 0;
+        top: 0;
+        font-family: var(--font-display);
+        font-size: 15px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        color: #eafaff;
+        text-shadow:
+          0 0 8px rgba(255, 255, 255, 0.9),
+          0 0 20px rgba(53, 208, 255, 0.95),
+          0 0 40px rgba(53, 208, 255, 0.5);
+        opacity: 0;
+        pointer-events: none;
+        white-space: nowrap;
+        z-index: 12;
+        will-change: transform, opacity;
+      }
+      .floater.show {
+        animation: floatUp 0.9s ease-out forwards;
+      }
+      @keyframes floatUp {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(0.7);
+        }
+        18% {
+          opacity: 1;
+          transform: translate(-50%, -75%) scale(1.12);
+        }
+        45% {
+          opacity: 1;
+          transform: translate(-50%, -110%) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -190%) scale(0.95);
+        }
+      }
+
       #near-miss {
         font-family: var(--font-display);
         font-size: 12px;
@@ -1777,6 +1818,38 @@
             for (let i = 0; i < n; i++) {
               tone({ freq: 520 + i * 120, dur: 0.11, type: "square", gain: 0.15, delay: i * 0.05 });
             }
+          },
+          // Gentle rush of air as a rival car slides past. `closeness` 0..1
+          // drives both volume and brightness, so distant cars stay subtle.
+          playTrafficPass(closeness) {
+            if (!ctx) return;
+            const t0 = ctx.currentTime;
+            const dur = 0.55;
+            const level = 0.035 + closeness * 0.075;
+
+            const bufferSize = Math.floor(ctx.sampleRate * dur);
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            const src = ctx.createBufferSource();
+            src.buffer = buffer;
+
+            // band sweeping downward is what sells the doppler drop
+            const band = ctx.createBiquadFilter();
+            band.type = "bandpass";
+            band.Q.value = 0.8;
+            band.frequency.setValueAtTime(1500 + closeness * 900, t0);
+            band.frequency.exponentialRampToValueAtTime(320, t0 + dur);
+
+            const g = ctx.createGain();
+            g.gain.setValueAtTime(0.0001, t0);
+            g.gain.linearRampToValueAtTime(level, t0 + dur * 0.32);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+
+            src.connect(band);
+            band.connect(g);
+            g.connect(sfxBus);
+            src.start(t0);
           },
           playNearMiss() {
             noiseBurst({ dur: 0.14, gain: 0.12, freq: 4200 });
@@ -3582,18 +3655,43 @@
       let combo = 0;
       const GRAPE_POINTS = 10;
       const NEAR_MISS_POINTS = 1;
+      const TRAFFIC_PASS_RANGE = 6; // how far out a passing car can still be heard
       const NEAR_MISS_BAND = 2.3; // squeeze past inside this to score, without touching
       const COMBO_TIMEOUT = 3; // seconds without a grape before the combo cashes itself out
       let comboTimer = 0; // one grape = 10 pts, and one combo step is worth the same
 
       // A combo is banked while you keep collecting; breaking it pays out its
       // grape-equivalent, so x3 hands you 3 x 10 = 30 points.
+      // Pooled DOM labels anchored to a 3D point, so feedback appears exactly
+      // where the action happened rather than in the corner of the HUD.
+      const FLOATER_POOL = 12;
+      const floaters = [];
+      for (let i = 0; i < FLOATER_POOL; i++) {
+        const el = document.createElement("div");
+        el.className = "floater";
+        document.body.appendChild(el);
+        floaters.push(el);
+      }
+      let floaterIndex = 0;
+      const floaterProject = new THREE.Vector3();
+      function spawnFloater(worldPos, text) {
+        floaterProject.copy(worldPos).project(camera);
+        if (floaterProject.z > 1) return; // behind the camera
+        const { width, height } = getViewportSize();
+        const el = floaters[floaterIndex];
+        floaterIndex = (floaterIndex + 1) % FLOATER_POOL;
+        el.textContent = text;
+        el.style.left = `${(floaterProject.x * 0.5 + 0.5) * width}px`;
+        el.style.top = `${(-floaterProject.y * 0.5 + 0.5) * height}px`;
+        el.classList.remove("show");
+        void el.offsetWidth; // restart the animation
+        el.classList.add("show");
+      }
+
       // Awarded once, as an obstacle slips behind the car's nose.
-      function awardNearMiss() {
+      function awardNearMiss(worldPos) {
         score += NEAR_MISS_POINTS;
-        nearMissEl.classList.remove("show");
-        void nearMissEl.offsetWidth;
-        nearMissEl.classList.add("show");
+        spawnFloater(worldPos, `+${NEAR_MISS_POINTS}pt`);
         Sound.playNearMiss();
       }
 
@@ -3926,7 +4024,8 @@
             // squeezed past without touching it?
             if (!o.scored && !o.hit && o.mesh.position.z > CAR_Z) {
               o.scored = true;
-              if (Math.abs(o.mesh.position.x - car.position.x) < NEAR_MISS_BAND) awardNearMiss();
+              if (Math.abs(o.mesh.position.x - car.position.x) < NEAR_MISS_BAND)
+                awardNearMiss(o.mesh.position);
             }
             if (o.mesh.position.z > PASS_BEHIND) {
               resetObstacle(o, SPAWN_FAR - Math.random() * 60);
@@ -3955,7 +4054,13 @@
             }
             if (!t.scored && !t.hit && t.mesh.position.z > CAR_Z) {
               t.scored = true;
-              if (Math.abs(t.mesh.position.x - car.position.x) < NEAR_MISS_BAND) awardNearMiss();
+              // whoosh scales with how tightly it went by
+              const gap = Math.abs(t.mesh.position.x - car.position.x);
+              if (gap < TRAFFIC_PASS_RANGE) {
+                Sound.playTrafficPass(1 - gap / TRAFFIC_PASS_RANGE);
+              }
+              if (Math.abs(t.mesh.position.x - car.position.x) < NEAR_MISS_BAND)
+                awardNearMiss(t.mesh.position);
             }
             if (t.mesh.position.z > PASS_BEHIND || t.mesh.position.z < SPAWN_FAR - 40) {
               resetTrafficCar(t, SPAWN_FAR - Math.random() * 80);
