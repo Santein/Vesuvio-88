@@ -277,6 +277,34 @@
         box-shadow: 0 0 8px rgba(255, 224, 102, 0.9);
       }
 
+      #near-miss {
+        font-family: var(--font-display);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: var(--palm-azure);
+        text-shadow: 0 0 10px rgba(53, 208, 255, 0.9);
+        opacity: 0;
+        pointer-events: none;
+      }
+      #near-miss.show {
+        animation: nearMiss 0.65s ease-out;
+      }
+      @keyframes nearMiss {
+        0% {
+          opacity: 0;
+          transform: translateX(8px);
+        }
+        25% {
+          opacity: 1;
+          transform: translateX(0);
+        }
+        100% {
+          opacity: 0;
+          transform: translateX(-10px);
+        }
+      }
+
       #combo-payout {
         font-family: var(--font-display);
         font-size: 17px;
@@ -1250,6 +1278,23 @@
         display: flex;
         gap: 13px;
       }
+      .touch-right {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 13px;
+      }
+      .touch-btn.drift {
+        background: rgba(255, 224, 102, 0.12);
+        border-color: rgba(255, 224, 102, 0.6);
+        color: var(--gold);
+        font-size: 26px;
+      }
+      /* held state, so it is obvious the slide is engaged */
+      .touch-btn.pressed {
+        background: rgba(255, 255, 255, 0.28);
+        box-shadow: 0 0 18px rgba(255, 255, 255, 0.5);
+      }
     </style>
   </head>
   <body>
@@ -1282,6 +1327,7 @@
         <div id="combo-value">COMBO x1</div>
         <div id="combo-timer-track"><div id="combo-timer"></div></div>
         <div id="combo-payout">+0</div>
+        <div id="near-miss">+1</div>
       </div>
     </div>
 
@@ -1410,9 +1456,12 @@
         <div class="touch-btn" id="btn-left">◄</div>
         <div class="touch-btn" id="btn-right">►</div>
       </div>
-      <div class="touch-steer">
-        <div class="touch-btn boost" id="btn-boost">⚛</div>
-        <div class="touch-btn gas" id="btn-brake">▼</div>
+      <div class="touch-right">
+        <div class="touch-btn drift" id="btn-drift">⇄</div>
+        <div class="touch-steer">
+          <div class="touch-btn boost" id="btn-boost">⚛</div>
+          <div class="touch-btn gas" id="btn-brake">▼</div>
+        </div>
       </div>
     </div>
 
@@ -1726,6 +1775,10 @@
             for (let i = 0; i < n; i++) {
               tone({ freq: 520 + i * 120, dur: 0.11, type: "square", gain: 0.15, delay: i * 0.05 });
             }
+          },
+          playNearMiss() {
+            noiseBurst({ dur: 0.14, gain: 0.12, freq: 4200 });
+            tone({ freq: 1500, dur: 0.07, type: "sine", gain: 0.06 });
           },
           playBoost() {
             // NOS-style ignition whoosh
@@ -2109,6 +2162,7 @@
         o.mesh.position.z = z;
         o.mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
         o.hit = false;
+        o.scored = false;
       }
       obstacles.forEach((o) => resetObstacle(o, o.mesh.position.z));
 
@@ -2430,6 +2484,7 @@
         t.mesh.position.z = z;
         t.travelSpeed = 22 + Math.random() * 16;
         t.hit = false;
+        t.scored = false;
       }
 
       // ---------- Flame trail: BTTF-style fire tracks at the start of each run ----------
@@ -2485,9 +2540,13 @@
       const sunLight = new THREE.DirectionalLight(0xffddc0, 0.7);
       sunLight.position.set(0, 20, -100);
       scene.add(sunLight);
-      const fillLight = new THREE.PointLight(0x35d0ff, 3, 30, 2);
-      fillLight.position.set(0, 4, CAR_Z + 2);
+      const fillLight = new THREE.PointLight(0x9fd8ff, 4.2, 36, 2);
+      fillLight.position.set(0, 4.5, CAR_Z + 2);
       scene.add(fillLight);
+      // low warm bounce so the flanks and wheels read against the dark asphalt
+      const carUnderLight = new THREE.PointLight(0xffd2b0, 1.5, 14, 2);
+      carUnderLight.position.set(0, 0.9, CAR_Z + 0.5);
+      scene.add(carUnderLight);
 
       // ---------- Car: real DMC DeLorean model (glTF), loaded async ----------
       // Calibrated by measuring the model's own bind-pose geometry: wheels already
@@ -2515,6 +2574,12 @@
               const mats = Array.isArray(node.material) ? node.material : [node.material];
               for (const mat of mats) {
                 if (mat.emissive && !carMaterials.some((entry) => entry.material === mat)) {
+                  // night scene leaves the stainless body very dark: lift it with a
+                  // cool self-glow and a touch more diffuse before capturing originals
+                  mat.emissive.setHex(0x232c3d);
+                  mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 0.32);
+                  if (mat.color) mat.color.multiplyScalar(1.12);
+                  if (mat.roughness !== undefined) mat.roughness = Math.min(1, mat.roughness * 0.92);
                   carMaterials.push({
                     material: mat,
                     originalEmissive: mat.emissive.clone(),
@@ -2695,13 +2760,19 @@
 
       function bindHold(id, onDown, onUp) {
         const el = document.getElementById(id);
-        el.addEventListener("pointerdown", (e) => {
+        const press = (e) => {
           e.preventDefault();
+          el.classList.add("pressed");
           onDown();
-        });
-        el.addEventListener("pointerup", onUp);
-        el.addEventListener("pointerleave", onUp);
-        el.addEventListener("pointercancel", onUp);
+        };
+        const release = () => {
+          el.classList.remove("pressed");
+          onUp();
+        };
+        el.addEventListener("pointerdown", press);
+        el.addEventListener("pointerup", release);
+        el.addEventListener("pointerleave", release);
+        el.addEventListener("pointercancel", release);
       }
       bindHold(
         "btn-left",
@@ -2717,6 +2788,12 @@
         "btn-brake",
         () => (input.brake = true),
         () => (input.brake = false),
+      );
+      // drift combines with the steer buttons: hold ⇄ and ◄/► together
+      bindHold(
+        "btn-drift",
+        () => (input.drift = true),
+        () => (input.drift = false),
       );
       document.getElementById("btn-boost").addEventListener("pointerdown", (e) => {
         e.preventDefault();
@@ -2884,6 +2961,7 @@
             ["🥤", "LATTINA · +1 VITA", "Una vita extra, fino a un massimo di 6. Se hai già tutte le vite non viene raccolta."],
             ["⚛", "MR. FUSION · +50 KM/H", "Puoi tenerne fino a 3. Premi SPAZIO per usarne uno e avere una spinta di 50 km/h."],
             ["⚡", "88 MPH · SALTO TEMPORALE", "Superando gli 88 mph parte il salto temporale: ti teletrasporta 20 metri più avanti."],
+            ["💨", "SFIORATA · +1 PT", "Passa rasente a una roccia o a un’auto senza toccarla e guadagni 1 punto."],
             ["🪨", "OSTACOLI", "Le rocce rosa ti fanno perdere una vita e azzerano la combo. Evitale."],
             ["🚗", "TRAFFICO", "Le auto più lente sono ostacoli come le rocce. Sorpassale."],
             ["🛣️", "FUORIPISTA", "Fuori dall'asfalto rallenti molto. Resta in carreggiata, soprattutto in curva."],
@@ -2936,6 +3014,7 @@
             ["🥤", "SODA CAN · +1 LIFE", "One extra life, up to a maximum of 6. If your lives are full it is left on the road."],
             ["⚛", "MR. FUSION · +50 KM/H", "Hold up to 3. Press SPACE to spend one for a 50 km/h boost."],
             ["⚡", "88 MPH · TIME JUMP", "Cross 88 mph and the time jump fires, teleporting you 20 metres ahead."],
+            ["💨", "NEAR MISS · +1 PT", "Squeeze past a rock or a car without touching it and you score 1 point."],
             ["🪨", "OBSTACLES", "Pink rocks cost you a life and reset your combo. Dodge them."],
             ["🚗", "TRAFFIC", "Slower cars hurt just like rocks. Overtake them."],
             ["🛣️", "OFF-ROAD", "Off the asphalt you slow right down. Stay on the road, especially through bends."],
@@ -2967,6 +3046,7 @@
       const recordValueEl = document.getElementById("record-value");
       const comboValueEl = document.getElementById("combo-value");
       const comboPayoutEl = document.getElementById("combo-payout");
+      const nearMissEl = document.getElementById("near-miss");
       const comboTimerEl = document.getElementById("combo-timer");
       const comboTimerTrackEl = document.getElementById("combo-timer-track");
       const crashFlashEl = document.getElementById("crash-flash");
@@ -3494,11 +3574,22 @@
       let lives = START_LIVES;
       let combo = 0;
       const GRAPE_POINTS = 10;
+      const NEAR_MISS_POINTS = 1;
+      const NEAR_MISS_BAND = 2.3; // squeeze past inside this to score, without touching
       const COMBO_TIMEOUT = 3; // seconds without a grape before the combo cashes itself out
       let comboTimer = 0; // one grape = 10 pts, and one combo step is worth the same
 
       // A combo is banked while you keep collecting; breaking it pays out its
       // grape-equivalent, so x3 hands you 3 x 10 = 30 points.
+      // Awarded once, as an obstacle slips behind the car's nose.
+      function awardNearMiss() {
+        score += NEAR_MISS_POINTS;
+        nearMissEl.classList.remove("show");
+        void nearMissEl.offsetWidth;
+        nearMissEl.classList.add("show");
+        Sound.playNearMiss();
+      }
+
       function cashInCombo() {
         if (combo > 0) {
           const payout = combo * GRAPE_POINTS;
@@ -3825,6 +3916,11 @@
                 triggerCrash();
               }
             }
+            // squeezed past without touching it?
+            if (!o.scored && !o.hit && o.mesh.position.z > CAR_Z) {
+              o.scored = true;
+              if (Math.abs(o.mesh.position.x - car.position.x) < NEAR_MISS_BAND) awardNearMiss();
+            }
             if (o.mesh.position.z > PASS_BEHIND) {
               resetObstacle(o, SPAWN_FAR - Math.random() * 60);
             }
@@ -3849,6 +3945,10 @@
               } else {
                 triggerCrash();
               }
+            }
+            if (!t.scored && !t.hit && t.mesh.position.z > CAR_Z) {
+              t.scored = true;
+              if (Math.abs(t.mesh.position.x - car.position.x) < NEAR_MISS_BAND) awardNearMiss();
             }
             if (t.mesh.position.z > PASS_BEHIND || t.mesh.position.z < SPAWN_FAR - 40) {
               resetTrafficCar(t, SPAWN_FAR - Math.random() * 80);
