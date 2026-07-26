@@ -29,7 +29,7 @@ Touch controls appear automatically on phones and tablets.
 - 88 mph "Salto Temporale" — Back to the Future style time jump with a +20 m skip
 - Fully procedural audio (Web Audio API): engine, tyre scrub, three synthwave tracks
 - Italian / English, with separate music and SFX volume sliders
-- Local top-5 leaderboard
+- Local top-5 leaderboard with arcade 3-letter initials entry
 
 ## Running locally
 

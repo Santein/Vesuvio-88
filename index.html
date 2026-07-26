@@ -399,6 +399,73 @@
         font-size: 11px;
       }
 
+      /* ---------- Arcade initials entry ---------- */
+      #initials-slots {
+        display: flex;
+        gap: 14px;
+        margin-top: 26px;
+      }
+      .initial-slot {
+        width: clamp(56px, 12vw, 86px);
+        height: clamp(72px, 15vw, 112px);
+        font-family: var(--font-display);
+        font-size: clamp(38px, 8vw, 62px);
+        font-weight: 900;
+        line-height: 1;
+        color: #eafcff;
+        background: rgba(14, 6, 32, 0.6);
+        border: 2px solid rgba(120, 200, 255, 0.28);
+        cursor: pointer;
+        transition:
+          border-color 0.18s ease,
+          box-shadow 0.18s ease,
+          color 0.18s ease;
+        clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+      }
+      .initial-slot.active {
+        border-color: var(--cyan);
+        color: #ffffff;
+        box-shadow:
+          0 0 22px rgba(53, 242, 255, 0.55),
+          inset 0 0 22px rgba(53, 242, 255, 0.14);
+        animation: slotBlink 1s steps(1) infinite;
+      }
+      @keyframes slotBlink {
+        50% {
+          border-color: rgba(120, 200, 255, 0.25);
+        }
+      }
+      #initials-help {
+        margin-top: 18px;
+        font-family: var(--font-ui);
+        font-size: 12.5px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: rgba(210, 232, 255, 0.5);
+        text-align: center;
+      }
+      #initials-confirm {
+        margin-top: 22px;
+        padding: 12px 46px;
+        font-family: var(--font-display);
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.2em;
+        color: #06121a;
+        background: linear-gradient(180deg, #9ff4ff, var(--cyan));
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 0 22px rgba(53, 242, 255, 0.55);
+        clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+      }
+      .lb-name {
+        flex: 1;
+        text-align: left;
+        padding-left: 14px;
+        letter-spacing: 0.12em;
+        opacity: 0.85;
+      }
+
       /* ---------- Full-screen flashes ---------- */
       #crash-flash,
       #pizza-flash,
@@ -979,6 +1046,18 @@
       <div class="leaderboard" id="start-leaderboard"></div>
       <div class="divider"></div>
       <div class="blink" id="start-blink">CARICAMENTO DELOREAN…</div>
+    </div>
+
+    <div id="initials-overlay" class="overlay-screen hidden">
+      <h1 id="initials-title">NUOVO RECORD</h1>
+      <div class="subtitle" id="initials-rank">1° POSTO · 0 PT</div>
+      <div id="initials-slots">
+        <button class="initial-slot" data-slot="0">A</button>
+        <button class="initial-slot" data-slot="1">A</button>
+        <button class="initial-slot" data-slot="2">A</button>
+      </div>
+      <div id="initials-help">scrivi le tue iniziali · ↑↓ cambia · INVIO conferma</div>
+      <button id="initials-confirm">CONFERMA</button>
     </div>
 
     <div id="gameover-overlay" class="overlay-screen hidden">
@@ -2238,6 +2317,10 @@
       }
 
       window.addEventListener("keydown", (e) => {
+        if (initialsActive) {
+          handleInitialsKey(e);
+          return;
+        }
         if (e.code === "ArrowLeft" || e.code === "KeyA") input.left = true;
         if (e.code === "ArrowRight" || e.code === "KeyD") input.right = true;
         if (e.code === "ArrowDown" || e.code === "KeyS") input.brake = true;
@@ -2252,6 +2335,7 @@
         }
       });
       window.addEventListener("keyup", (e) => {
+        if (initialsActive) return;
         if (e.code === "ArrowLeft" || e.code === "KeyA") input.left = false;
         if (e.code === "ArrowRight" || e.code === "KeyD") input.right = false;
         if (e.code === "ArrowDown" || e.code === "KeyS") input.brake = false;
@@ -2296,7 +2380,7 @@
       // Polled once per frame and merged with keyboard/touch, so any control
       // scheme can drive at the same time.
       const padInput = { left: false, right: false, brake: false, drift: false, steerAxis: 0 };
-      const padPrev = { boost: false, start: false };
+      const padPrev = { boost: false, start: false, up: false, down: false, left: false, right: false };
       const STICK_DEADZONE = 0.18;
 
       function pressed(pad, index) {
@@ -2329,6 +2413,24 @@
 
         const boostNow = pressed(pad, 0); // A
         const startNow = pressed(pad, 9); // Start
+        if (initialsActive) {
+          const up = pressed(pad, 12);
+          const down = pressed(pad, 13);
+          const left = pressed(pad, 14);
+          const right = pressed(pad, 15);
+          if (up && !padPrev.up) cycleInitial(1);
+          if (down && !padPrev.down) cycleInitial(-1);
+          if (left && !padPrev.left) moveInitialCursor(-1);
+          if (right && !padPrev.right) moveInitialCursor(1);
+          if (boostNow && !padPrev.boost) confirmInitials();
+          padPrev.up = up;
+          padPrev.down = down;
+          padPrev.left = left;
+          padPrev.right = right;
+          padPrev.boost = boostNow;
+          padPrev.start = startNow;
+          return;
+        }
         if (settingsOpen) {
           padPrev.boost = boostNow;
           padPrev.start = startNow;
@@ -2366,6 +2468,10 @@
           timeJumpSub: "+20 M NEL FUTURO",
           fusion: "⚛ MR. FUSION",
           extraLife: "🥤 +1 VITA",
+          newRecord: "NUOVO RECORD",
+          initialsHelp: "scrivi le tue iniziali · ↑↓ cambia · INVIO conferma",
+          confirm: "CONFERMA",
+          rankLine: (place, pts) => `${place}° POSTO · ${pts} PT`,
           madeBy: "Creato da",
           settings: "IMPOSTAZIONI",
           language: "LINGUA",
@@ -2393,6 +2499,10 @@
           timeJumpSub: "+20 M INTO THE FUTURE",
           fusion: "⚛ MR. FUSION",
           extraLife: "🥤 +1 LIFE",
+          newRecord: "NEW HIGH SCORE",
+          initialsHelp: "type your initials · ↑↓ change · ENTER to confirm",
+          confirm: "CONFIRM",
+          rankLine: (place, pts) => `RANK ${place} · ${pts} PT`,
           madeBy: "Made by",
           settings: "SETTINGS",
           language: "LANGUAGE",
@@ -2465,10 +2575,23 @@
       }
 
       // ---------- Local top-5 leaderboard ----------
+      const LEADERBOARD_SIZE = 5;
+      // Entries are { name, score }. Scores saved by older builds were bare
+      // numbers, so those are migrated to a placeholder name on read.
       function loadLeaderboard() {
         try {
           const raw = JSON.parse(localStorage.getItem("outrunLeaderboard") || "[]");
-          return Array.isArray(raw) ? raw.filter((n) => Number.isFinite(n)).slice(0, 5) : [];
+          if (!Array.isArray(raw)) return [];
+          return raw
+            .map((e) =>
+              Number.isFinite(e)
+                ? { name: "---", score: e }
+                : e && Number.isFinite(e.score)
+                  ? { name: String(e.name || "---").slice(0, 3), score: e.score }
+                  : null,
+            )
+            .filter(Boolean)
+            .slice(0, LEADERBOARD_SIZE);
         } catch (e) {
           return [];
         }
@@ -2480,31 +2603,132 @@
           /* storage unavailable */
         }
       }
-      function submitScore(finalScore) {
+      // True when the score earns a place, so we only ask for initials then.
+      function qualifiesForLeaderboard(finalScore) {
+        if (finalScore <= 0) return false;
         const list = loadLeaderboard();
-        list.push(finalScore);
-        list.sort((a, b) => b - a);
-        const top5 = list.slice(0, 5);
-        saveLeaderboard(top5);
-        return top5;
+        return list.length < LEADERBOARD_SIZE || finalScore > list[list.length - 1].score;
       }
-      function renderLeaderboard(container, highlightScore) {
+      // Returns the row index the new entry landed on, for highlighting.
+      function submitScore(name, finalScore) {
         const list = loadLeaderboard();
-        let highlighted = false;
+        const entry = { name, score: finalScore };
+        list.push(entry);
+        list.sort((a, b) => b.score - a.score);
+        const top = list.slice(0, LEADERBOARD_SIZE);
+        saveLeaderboard(top);
+        return top.indexOf(entry);
+      }
+      function renderLeaderboard(container, highlightIndex) {
+        const list = loadLeaderboard();
         const rows = list.length
           ? list
-              .map((s, i) => {
-                const isMine = !highlighted && s === highlightScore;
-                if (isMine) highlighted = true;
-                return `<div class="lb-row${isMine ? " mine" : ""}"><span class="lb-rank">0${i + 1}</span><span>${s} PT</span></div>`;
+              .map((e, i) => {
+                const mine = i === highlightIndex ? " mine" : "";
+                return `<div class="lb-row${mine}"><span class="lb-rank">0${i + 1}</span><span class="lb-name">${e.name}</span><span>${e.score} PT</span></div>`;
               })
               .join("")
           : `<div class="lb-row"><span class="lb-rank">—</span><span>${t("noScores")}</span></div>`;
         container.innerHTML = `<div class="lb-title">${t("top5")}</div>${rows}`;
       }
       renderLeaderboard(document.getElementById("start-leaderboard"));
-      const bestScore = loadLeaderboard()[0] || 0;
+      const bestScore = loadLeaderboard()[0]?.score || 0;
       recordValueEl.textContent = t("record")(bestScore);
+
+      // ---------- Arcade initials entry ----------
+      // Shown only when a run places in the top five. Accepts typed letters,
+      // arrow-key/gamepad cycling, or tapping a slot on touch.
+      const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      const initialsOverlayEl = document.getElementById("initials-overlay");
+      const initialSlotEls = Array.from(document.querySelectorAll(".initial-slot"));
+      let initialsActive = false;
+      let initialsLetters = ["A", "A", "A"];
+      let initialsIndex = 0;
+      let initialsPendingScore = 0;
+
+      function renderInitials() {
+        initialSlotEls.forEach((el, i) => {
+          el.textContent = initialsLetters[i];
+          el.classList.toggle("active", i === initialsIndex && initialsActive);
+        });
+      }
+
+      function openInitialsEntry(finalScore) {
+        initialsActive = true;
+        initialsPendingScore = finalScore;
+        initialsLetters = ["A", "A", "A"];
+        initialsIndex = 0;
+        // preview which place they've earned
+        const list = loadLeaderboard();
+        const place = list.filter((e) => e.score >= finalScore).length + 1;
+        document.getElementById("initials-rank").textContent = t("rankLine")(place, finalScore);
+        renderInitials();
+        initialsOverlayEl.classList.remove("hidden");
+      }
+
+      function confirmInitials() {
+        if (!initialsActive) return;
+        initialsActive = false;
+        initialsOverlayEl.classList.add("hidden");
+        const name = initialsLetters.join("");
+        const index = submitScore(name, initialsPendingScore);
+        renderLeaderboard(document.getElementById("start-leaderboard"));
+        recordValueEl.textContent = t("record")(loadLeaderboard()[0]?.score || 0);
+        showGameOverScreen(initialsPendingScore, index);
+        Sound.playExtraLife();
+      }
+
+      function cycleInitial(delta) {
+        const cur = ALPHABET.indexOf(initialsLetters[initialsIndex]);
+        const next = (cur + delta + ALPHABET.length) % ALPHABET.length;
+        initialsLetters[initialsIndex] = ALPHABET[next];
+        renderInitials();
+      }
+      function moveInitialCursor(delta) {
+        initialsIndex = Math.min(2, Math.max(0, initialsIndex + delta));
+        renderInitials();
+      }
+
+      function handleInitialsKey(e) {
+        if (/^[a-zA-Z]$/.test(e.key)) {
+          initialsLetters[initialsIndex] = e.key.toUpperCase();
+          if (initialsIndex < 2) initialsIndex += 1;
+          renderInitials();
+          Sound.playCountdownTick(3);
+        } else if (e.code === "Backspace") {
+          e.preventDefault();
+          initialsLetters[initialsIndex] = "A";
+          if (initialsIndex > 0) initialsIndex -= 1;
+          renderInitials();
+        } else if (e.code === "ArrowUp") {
+          e.preventDefault();
+          cycleInitial(1);
+        } else if (e.code === "ArrowDown") {
+          e.preventDefault();
+          cycleInitial(-1);
+        } else if (e.code === "ArrowLeft") {
+          e.preventDefault();
+          moveInitialCursor(-1);
+        } else if (e.code === "ArrowRight") {
+          e.preventDefault();
+          moveInitialCursor(1);
+        } else if (e.code === "Enter" || e.code === "Space") {
+          e.preventDefault();
+          confirmInitials();
+        }
+      }
+
+      initialSlotEls.forEach((el, i) => {
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          initialsIndex = i;
+          cycleInitial(1); // tapping a slot advances its letter
+        });
+      });
+      document.getElementById("initials-confirm").addEventListener("click", (e) => {
+        e.stopPropagation();
+        confirmInitials();
+      });
 
       // ---------- Settings panel ----------
       const settingsOverlayEl = document.getElementById("settings-overlay");
@@ -2529,6 +2753,9 @@
         document.getElementById("pad-toast").textContent = t("padConnected");
         document.getElementById("fusion-banner").textContent = t("fusion");
         document.getElementById("life-banner").textContent = t("extraLife");
+        document.getElementById("initials-title").textContent = t("newRecord");
+        document.getElementById("initials-help").textContent = t("initialsHelp");
+        document.getElementById("initials-confirm").textContent = t("confirm");
         document.getElementById("author").innerHTML =
           `${t("madeBy")} <a href="https://linktr.ee/santo.gaglione" target="_blank" rel="noopener noreferrer">Santein</a>`;
         timejumpBannerEl.innerHTML = `${t("timeJump")}<span class="tj-sub">${t("timeJumpSub")}</span>`;
@@ -2675,9 +2902,14 @@
         Sound.stopEngine();
         Sound.playGameOver();
         const finalScore = Math.floor(score);
+        // a placing score earns the arcade initials prompt first
+        if (qualifiesForLeaderboard(finalScore)) openInitialsEntry(finalScore);
+        else showGameOverScreen(finalScore, -1);
+      }
+
+      function showGameOverScreen(finalScore, highlightIndex) {
         document.getElementById("gameover-score").textContent = `${finalScore} PT`;
-        submitScore(finalScore);
-        renderLeaderboard(document.getElementById("gameover-leaderboard"), finalScore);
+        renderLeaderboard(document.getElementById("gameover-leaderboard"), highlightIndex);
         document.getElementById("gameover-overlay").classList.remove("hidden");
       }
 
