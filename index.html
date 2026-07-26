@@ -66,6 +66,28 @@
         box-shadow: inset 0 0 180px rgba(0, 0, 0, 0.8);
       }
 
+      /* breathes red around the edges of frame while you are on your last life */
+      #danger-vignette {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 16;
+        opacity: 0;
+        box-shadow: inset 0 0 150px 18px rgba(255, 42, 96, 0.55);
+      }
+      #danger-vignette.show {
+        animation: dangerPulse 1.5s ease-in-out infinite;
+      }
+      @keyframes dangerPulse {
+        0%,
+        100% {
+          opacity: 0.16;
+        }
+        50% {
+          opacity: 0.62;
+        }
+      }
+
       /* ---------- HUD ---------- */
       #hud {
         position: fixed;
@@ -315,34 +337,6 @@
         100% {
           opacity: 0;
           transform: translate(-50%, -190%) scale(0.95);
-        }
-      }
-
-      #near-miss {
-        font-family: var(--font-display);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        color: var(--palm-azure);
-        text-shadow: 0 0 10px rgba(53, 208, 255, 0.9);
-        opacity: 0;
-        pointer-events: none;
-      }
-      #near-miss.show {
-        animation: nearMiss 0.65s ease-out;
-      }
-      @keyframes nearMiss {
-        0% {
-          opacity: 0;
-          transform: translateX(8px);
-        }
-        25% {
-          opacity: 1;
-          transform: translateX(0);
-        }
-        100% {
-          opacity: 0;
-          transform: translateX(-10px);
         }
       }
 
@@ -1370,7 +1364,6 @@
         <div id="combo-value">COMBO x1</div>
         <div id="combo-timer-track"><div id="combo-timer"></div></div>
         <div id="combo-payout">+0</div>
-        <div id="near-miss">+1</div>
       </div>
     </div>
 
@@ -1509,6 +1502,7 @@
     </div>
 
     <div id="crt"></div>
+    <div id="danger-vignette"></div>
 
     <script type="importmap">
       {
@@ -2066,18 +2060,129 @@
       scene.add(mountains);
 
       // ---------- Stars ----------
+      const STAR_COUNT = 400;
+      const starPos = new Float32Array(STAR_COUNT * 3);
+      for (let i = 0; i < STAR_COUNT; i++) {
+        starPos[i * 3] = (Math.random() - 0.5) * 300;
+        starPos[i * 3 + 1] = 20 + Math.random() * 90;
+        starPos[i * 3 + 2] = -260 + Math.random() * 150;
+      }
+      const starGeo = new THREE.BufferGeometry();
+      starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+      const starMat = new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.1, sizeAttenuation: true, fog: false });
+      scene.add(new THREE.Points(starGeo, starMat));
+
+      // ---------- Warp: star trails + near-field speed lines ----------
+      // One "warp" value drives both layers. It rises gently with raw speed, so
+      // the sky smears when you are really moving, and spikes on a time jump for
+      // the full hyperspace burst before settling back to still points.
+
+      // Every star grows a segment running away from the point dead ahead, so
+      // the field appears to explode outwards from the horizon.
+      const starTrailPos = new Float32Array(STAR_COUNT * 6);
+      const starTrailDir = new Float32Array(STAR_COUNT * 3);
+      const starTrailReach = new Float32Array(STAR_COUNT);
       {
-        const STAR_COUNT = 400;
-        const pos = new Float32Array(STAR_COUNT * 3);
+        const EYE_Y = 3.6; // roughly where the camera sits, i.e. the vanishing point
         for (let i = 0; i < STAR_COUNT; i++) {
-          pos[i * 3] = (Math.random() - 0.5) * 300;
-          pos[i * 3 + 1] = 20 + Math.random() * 90;
-          pos[i * 3 + 2] = -260 + Math.random() * 150;
+          const x = starPos[i * 3];
+          const y = starPos[i * 3 + 1];
+          const z = starPos[i * 3 + 2];
+          const radial = Math.hypot(x, y - EYE_Y) || 1;
+          starTrailDir[i * 3] = x / radial;
+          starTrailDir[i * 3 + 1] = (y - EYE_Y) / radial;
+          starTrailDir[i * 3 + 2] = 0.55; // plus a lean towards the camera, which reads as speed
+          starTrailReach[i] = 7 + radial * 0.34; // stars further off-axis smear further
+          starTrailPos[i * 6] = starTrailPos[i * 6 + 3] = x;
+          starTrailPos[i * 6 + 1] = starTrailPos[i * 6 + 4] = y;
+          starTrailPos[i * 6 + 2] = starTrailPos[i * 6 + 5] = z;
         }
-        const starGeo = new THREE.BufferGeometry();
-        starGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-        const starMat = new THREE.PointsMaterial({ color: 0xdfe6ff, size: 1.1, sizeAttenuation: true, fog: false });
-        scene.add(new THREE.Points(starGeo, starMat));
+      }
+      const starTrailGeo = new THREE.BufferGeometry();
+      starTrailGeo.setAttribute("position", new THREE.BufferAttribute(starTrailPos, 3));
+      const starTrailMat = new THREE.LineBasicMaterial({
+        color: 0xdbe9ff,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+      });
+      const starTrails = new THREE.LineSegments(starTrailGeo, starTrailMat);
+      starTrails.frustumCulled = false; // the segments outgrow their bounding sphere
+      starTrails.visible = false;
+      scene.add(starTrails);
+
+      // A sleeve of streaks flying past the camera. The radius keeps them out at
+      // the edges of frame, clear of the road, so they read as motion not clutter.
+      const SPEEDLINE_COUNT = 60;
+      const speedLinePos = new Float32Array(SPEEDLINE_COUNT * 6);
+      const speedLineState = [];
+      for (let i = 0; i < SPEEDLINE_COUNT; i++) {
+        speedLineState.push({
+          angle: Math.random() * Math.PI * 2,
+          radius: 7 + Math.random() * 19,
+          z: -60 + Math.random() * 64,
+        });
+      }
+      const speedLineGeo = new THREE.BufferGeometry();
+      speedLineGeo.setAttribute("position", new THREE.BufferAttribute(speedLinePos, 3));
+      const speedLineMat = new THREE.LineBasicMaterial({
+        color: 0xbfe4ff,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        fog: false,
+      });
+      const speedLines = new THREE.LineSegments(speedLineGeo, speedLineMat);
+      speedLines.frustumCulled = false;
+      speedLines.visible = false;
+      scene.add(speedLines);
+
+      // The two layers answer to different things: the near-field lines track raw
+      // speed, while the sky is kept almost still until a jump, so that smearing
+      // the stars stays a rare event rather than the normal look of going fast.
+      function updateWarpFx(speedWarp, jumpWarp, dt) {
+        const starWarp = jumpWarp * 1.2 + speedWarp * 0.22;
+        const lineWarp = speedWarp + jumpWarp * 1.2;
+
+        if (starWarp <= 0.002 && lineWarp <= 0.002) {
+          starTrails.visible = false;
+          speedLines.visible = false;
+          return;
+        }
+
+        starTrails.visible = starWarp > 0.002;
+        starTrailMat.opacity = Math.min(1, starWarp * 1.1);
+        for (let i = 0; i < STAR_COUNT; i++) {
+          const len = starWarp * starTrailReach[i];
+          starTrailPos[i * 6 + 3] = starPos[i * 3] + starTrailDir[i * 3] * len;
+          starTrailPos[i * 6 + 4] = starPos[i * 3 + 1] + starTrailDir[i * 3 + 1] * len;
+          starTrailPos[i * 6 + 5] = starPos[i * 3 + 2] + starTrailDir[i * 3 + 2] * len;
+        }
+        starTrailGeo.attributes.position.needsUpdate = true;
+
+        speedLines.visible = lineWarp > 0.002;
+        speedLineMat.opacity = Math.min(0.8, lineWarp * 0.3);
+        const streak = 3 + lineWarp * 15;
+        const travel = (34 + lineWarp * 150) * dt;
+        for (let i = 0; i < SPEEDLINE_COUNT; i++) {
+          const s = speedLineState[i];
+          s.z += travel;
+          if (s.z > 4) {
+            s.z = -60;
+            s.angle = Math.random() * Math.PI * 2;
+            s.radius = 7 + Math.random() * 19;
+          }
+          const x = Math.cos(s.angle) * s.radius;
+          const y = Math.sin(s.angle) * s.radius;
+          speedLinePos[i * 6] = speedLinePos[i * 6 + 3] = x;
+          speedLinePos[i * 6 + 1] = speedLinePos[i * 6 + 4] = y;
+          speedLinePos[i * 6 + 2] = s.z;
+          speedLinePos[i * 6 + 5] = s.z - streak;
+        }
+        speedLineGeo.attributes.position.needsUpdate = true;
       }
 
       // ---------- Ground: road + neon shoulder grid (single scrolling texture) ----------
@@ -3041,7 +3146,7 @@
             ["🥤", "LATTINA · +1 VITA", "Una vita extra, fino a un massimo di 6. Se hai già tutte le vite non viene raccolta."],
             ["⚛", "MR. FUSION · +50 KM/H", "Puoi tenerne fino a 3. Premi SPAZIO per usarne uno e avere una spinta di 50 km/h."],
             ["⚡", "88 MPH · SALTO TEMPORALE", "Superando gli 88 mph parte il salto temporale: ti teletrasporta 20 metri più avanti."],
-            ["💨", "SFIORATA · +1 PT", "Passa rasente a una roccia o a un’auto senza toccarla e guadagni 1 punto."],
+            ["💨", "SFIORATA · +2 PT", "Passa rasente a una roccia o a un’auto senza toccarla e guadagni 2 punti."],
             ["🪨", "OSTACOLI", "Le rocce rosa ti fanno perdere una vita e azzerano la combo. Evitale."],
             ["🚗", "TRAFFICO", "Le auto più lente sono ostacoli come le rocce. Sorpassale."],
             ["🛣️", "FUORIPISTA", "Fuori dall'asfalto rallenti molto. Resta in carreggiata, soprattutto in curva."],
@@ -3094,7 +3199,7 @@
             ["🥤", "SODA CAN · +1 LIFE", "One extra life, up to a maximum of 6. If your lives are full it is left on the road."],
             ["⚛", "MR. FUSION · +50 KM/H", "Hold up to 3. Press SPACE to spend one for a 50 km/h boost."],
             ["⚡", "88 MPH · TIME JUMP", "Cross 88 mph and the time jump fires, teleporting you 20 metres ahead."],
-            ["💨", "NEAR MISS · +1 PT", "Squeeze past a rock or a car without touching it and you score 1 point."],
+            ["💨", "NEAR MISS · +2 PTS", "Squeeze past a rock or a car without touching it and you score 2 points."],
             ["🪨", "OBSTACLES", "Pink rocks cost you a life and reset your combo. Dodge them."],
             ["🚗", "TRAFFIC", "Slower cars hurt just like rocks. Overtake them."],
             ["🛣️", "OFF-ROAD", "Off the asphalt you slow right down. Stay on the road, especially through bends."],
@@ -3126,7 +3231,6 @@
       const recordValueEl = document.getElementById("record-value");
       const comboValueEl = document.getElementById("combo-value");
       const comboPayoutEl = document.getElementById("combo-payout");
-      const nearMissEl = document.getElementById("near-miss");
       const comboTimerEl = document.getElementById("combo-timer");
       const comboTimerTrackEl = document.getElementById("combo-timer-track");
       const crashFlashEl = document.getElementById("crash-flash");
@@ -3149,8 +3253,10 @@
         scoreValueEl.classList.add("pop");
       }
 
+      const dangerVignetteEl = document.getElementById("danger-vignette");
       function updateLivesHUD() {
         heartEls.forEach((el, i) => el.classList.toggle("lost", i >= lives));
+        dangerVignetteEl.classList.toggle("show", lives === 1);
       }
       function updateFusionHUD() {
         fusionSlotEls.forEach((el, i) => el.classList.toggle("empty", i >= fusionStock));
@@ -3654,7 +3760,7 @@
       let lives = START_LIVES;
       let combo = 0;
       const GRAPE_POINTS = 10;
-      const NEAR_MISS_POINTS = 1;
+      const NEAR_MISS_POINTS = 2;
       const TRAFFIC_PASS_RANGE = 6; // how far out a passing car can still be heard
       const NEAR_MISS_BAND = 2.3; // squeeze past inside this to score, without touching
       const COMBO_TIMEOUT = 3; // seconds without a grape before the combo cashes itself out
@@ -3715,6 +3821,7 @@
       let prevSpeed = 0; // previous frame's speed, for rising-edge 88mph detection
       let timeJumpFovBoost = 0;
       let timeJumpBloomBoost = 0;
+      let timeJumpEnv = 0; // 0..1 shape of the jump, shared with the warp streaks
       // Eased attack/release envelope for the jump's camera punch, so the FOV and
       // bloom swell and settle smoothly instead of snapping on and ramping off.
       let timeJumpFxT = -1; // seconds since the burst cue, <0 = idle
@@ -3770,6 +3877,7 @@
         started = false;
         Sound.stopEngine();
         Sound.playGameOver();
+        updateWarpFx(0, 0, 0); // the loop stops updating them, so clear the streaks here
         const finalScore = Math.floor(score);
         // a placing score earns the arcade initials prompt first
         if (qualifiesForLeaderboard(finalScore)) openInitialsEntry(finalScore);
@@ -3805,9 +3913,11 @@
         comboTimer = 0;
         hasTimeJumped = false;
         prevSpeed = 0;
+        timeJumpEnv = 0;
         timeJumpFovBoost = 0;
         timeJumpBloomBoost = 0;
         timeJumpFxT = -1;
+        updateWarpFx(0, 0, 0); // clear any streaks left frozen on screen
         flameTrailTimer = 0;
         flameSpawnAccum = 0;
         flames.forEach((f) => {
@@ -3916,10 +4026,12 @@
               const r = (timeJumpFxT - TJ_ATTACK) / TJ_RELEASE;
               env = r >= 1 ? 0 : 1 - easeInOutCubic(r); // settle out
             }
+            timeJumpEnv = env;
             timeJumpFovBoost = env * TJ_FOV_PEAK;
             timeJumpBloomBoost = env * TJ_BLOOM_PEAK;
             if (timeJumpFxT > TJ_ATTACK + TJ_RELEASE) timeJumpFxT = -1;
           } else {
+            timeJumpEnv = 0;
             timeJumpFovBoost = 0;
             timeJumpBloomBoost = 0;
           }
@@ -4267,6 +4379,12 @@
 
           mountains.position.x = -car.position.x * 0.15;
           sun.position.x = -car.position.x * 0.08;
+
+          // speed lines fade in over the top third of the speed range; the jump
+          // envelope then slams both layers into hyperspace and settles on its own
+          const speedWarp = Math.max(0, (speed / maxSpeed - 0.68) / 0.32) * 0.38;
+          speedLines.position.copy(camera.position);
+          updateWarpFx(speedWarp, timeJumpEnv, dt);
 
           // HUD
           const kmh = Math.round((speed / 100) * 210);
