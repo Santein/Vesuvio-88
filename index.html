@@ -758,10 +758,12 @@
         font-size: clamp(60px, 13vw, 130px);
         font-weight: 900;
         line-height: 1;
-        color: #fff6d8;
+        color: #f4fcff;
         text-shadow:
-          0 0 26px rgba(255, 200, 80, 0.95),
-          0 0 60px rgba(255, 140, 40, 0.6);
+          0 0 10px rgba(255, 255, 255, 0.95),
+          0 0 26px rgba(120, 220, 255, 0.95),
+          0 0 58px rgba(53, 208, 255, 0.7),
+          0 0 96px rgba(53, 208, 255, 0.35);
         z-index: 14;
         opacity: 0;
         pointer-events: none;
@@ -2540,13 +2542,23 @@
       const sunLight = new THREE.DirectionalLight(0xffddc0, 0.7);
       sunLight.position.set(0, 20, -100);
       scene.add(sunLight);
-      const fillLight = new THREE.PointLight(0x9fd8ff, 4.2, 36, 2);
-      fillLight.position.set(0, 4.5, CAR_Z + 2);
+      const fillLight = new THREE.PointLight(0x35d0ff, 3, 30, 2);
+      fillLight.position.set(0, 4, CAR_Z + 2);
       scene.add(fillLight);
-      // low warm bounce so the flanks and wheels read against the dark asphalt
-      const carUnderLight = new THREE.PointLight(0xffd2b0, 1.5, 14, 2);
-      carUnderLight.position.set(0, 0.9, CAR_Z + 0.5);
-      scene.add(carUnderLight);
+
+      // ---------- Car-only lighting rig ----------
+      // These live on layer 1. Three.js only lets a light illuminate objects that
+      // share one of its layers, and the DeLorean is the only thing on layer 1 —
+      // so the car can be lifted out of the dark without touching the scene.
+      const CAR_LIGHT_LAYER = 1;
+      const carKeyLight = new THREE.PointLight(0xcfe8ff, 26, 22, 2);
+      carKeyLight.layers.set(CAR_LIGHT_LAYER);
+      carKeyLight.position.set(2.2, 2.6, CAR_Z + 4.5);
+      scene.add(carKeyLight);
+      const carRimLight = new THREE.PointLight(0xffd9c4, 14, 18, 2);
+      carRimLight.layers.set(CAR_LIGHT_LAYER);
+      carRimLight.position.set(-2.4, 1.8, CAR_Z - 3.0);
+      scene.add(carRimLight);
 
       // ---------- Car: real DMC DeLorean model (glTF), loaded async ----------
       // Calibrated by measuring the model's own bind-pose geometry: wheels already
@@ -2574,12 +2586,6 @@
               const mats = Array.isArray(node.material) ? node.material : [node.material];
               for (const mat of mats) {
                 if (mat.emissive && !carMaterials.some((entry) => entry.material === mat)) {
-                  // night scene leaves the stainless body very dark: lift it with a
-                  // cool self-glow and a touch more diffuse before capturing originals
-                  mat.emissive.setHex(0x232c3d);
-                  mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 0.32);
-                  if (mat.color) mat.color.multiplyScalar(1.12);
-                  if (mat.roughness !== undefined) mat.roughness = Math.min(1, mat.roughness * 0.92);
                   carMaterials.push({
                     material: mat,
                     originalEmissive: mat.emissive.clone(),
@@ -2588,6 +2594,7 @@
                 }
               }
             }
+            node.layers.enable(CAR_LIGHT_LAYER); // opt in to the car-only lights
             if (node.isBone && /wheel/i.test(node.name)) {
               wheelBones.push(node);
             }
