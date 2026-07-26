@@ -701,6 +701,15 @@
       #invuln-banner.show {
         opacity: 1;
       }
+      /* On a phone the two HUD panels leave only ~120px of clear width between
+         them, which no readable size fits, so the badge shrinks and drops below. */
+      @media (max-width: 520px) {
+        #invuln-banner {
+          top: 152px;
+          font-size: 10px;
+          letter-spacing: 0.1em;
+        }
+      }
       @keyframes rainbowText {
         0% {
           color: #ffe066;
@@ -1278,6 +1287,9 @@
         bottom: 22px;
         display: none;
         justify-content: space-between;
+        /* the right-hand stack is two rows tall, so without this the steer pair
+           would ride at the top of it instead of sitting level with the brake */
+        align-items: flex-end;
         padding: 0 20px;
         z-index: 25;
       }
