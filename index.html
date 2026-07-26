@@ -246,6 +246,38 @@
         }
       }
 
+      #combo-payout {
+        font-family: var(--font-display);
+        font-size: 17px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        color: var(--gold);
+        text-shadow: 0 0 14px rgba(255, 224, 102, 0.9);
+        opacity: 0;
+        pointer-events: none;
+        font-variant-numeric: tabular-nums;
+      }
+      #combo-payout.show {
+        animation: comboCash 1.1s ease-out;
+      }
+      @keyframes comboCash {
+        0% {
+          opacity: 0;
+          transform: translateY(6px) scale(0.8);
+        }
+        20% {
+          opacity: 1;
+          transform: translateY(0) scale(1.25);
+        }
+        45% {
+          transform: translateY(0) scale(1);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-14px) scale(1);
+        }
+      }
+
       /* ---------- Hint bar ---------- */
       #hint {
         position: fixed;
@@ -971,6 +1003,7 @@
         <div class="hud-unit" id="distance-value">0 m percorsi</div>
         <div class="hud-unit" id="record-value">record 0 pt</div>
         <div id="combo-value">COMBO x1</div>
+        <div id="combo-payout">+0</div>
       </div>
     </div>
 
@@ -1040,7 +1073,7 @@
       <h1>VESUVIO 88</h1>
       <div class="subtitle" id="start-subtitle">GOLFO DI NAPOLI · 1985</div>
       <p id="start-desc">
-        Corsa infinita al tramonto. Raccogli l'uva per fare combo, la pizza ti rende invulnerabile,
+        Corsa infinita al tramonto. Ogni uva vale 10 pt e alza la combo, incassata quando si spezza; la pizza ti rende invulnerabile,
         Mr. Fusion ti spinge a +50 km/h. A 88 mph… salto temporale.
       </p>
       <div class="leaderboard" id="start-leaderboard"></div>
@@ -1383,6 +1416,12 @@
             // higher and sharper as the timer runs down: 3 -> 2 -> 1
             const freq = n === 1 ? 1100 : n === 2 ? 900 : 760;
             tone({ freq, dur: n === 1 ? 0.3 : 0.16, type: "square", gain: 0.17 });
+          },
+          playComboCash(steps) {
+            const n = Math.min(steps, 6);
+            for (let i = 0; i < n; i++) {
+              tone({ freq: 520 + i * 120, dur: 0.11, type: "square", gain: 0.15, delay: i * 0.05 });
+            }
           },
           playBoost() {
             // NOS-style ignition whoosh
@@ -2488,7 +2527,7 @@
           speed: "SPEED",
           score: "SCORE",
           subtitle: "GULF OF NAPLES · 1985",
-          desc: "An endless sunset run. Grab grapes to build combos, pizza makes you invincible, a soda can is an extra life, Mr. Fusion pushes you +50 km/h. At 88 mph… time jump.",
+          desc: "An endless sunset run. Each grape is 10 pts and builds a combo, cashed in when it breaks; pizza makes you invincible, a soda can is an extra life, Mr. Fusion pushes you +50 km/h. At 88 mph… time jump.",
           loading: "LOADING DELOREAN…",
           pressStart: "PRESS ENTER OR TAP THE SCREEN TO START",
           gameOver: "GAME OVER",
@@ -2534,6 +2573,7 @@
       const distanceValueEl = document.getElementById("distance-value");
       const recordValueEl = document.getElementById("record-value");
       const comboValueEl = document.getElementById("combo-value");
+      const comboPayoutEl = document.getElementById("combo-payout");
       const crashFlashEl = document.getElementById("crash-flash");
       const pizzaFlashEl = document.getElementById("pizza-flash");
       const invulnBannerEl = document.getElementById("invuln-banner");
@@ -2840,6 +2880,24 @@
       let invulnerable = 0; // seconds of pizza-powered invulnerability remaining
       let lives = START_LIVES;
       let combo = 0;
+      const GRAPE_POINTS = 10; // one grape = 10 pts, and one combo step is worth the same
+
+      // A combo is banked while you keep collecting; breaking it pays out its
+      // grape-equivalent, so x3 hands you 3 x 10 = 30 points.
+      function cashInCombo() {
+        if (combo > 0) {
+          const payout = combo * GRAPE_POINTS;
+          score += payout;
+          triggerScorePop();
+          comboPayoutEl.textContent = `+${payout}`;
+          comboPayoutEl.classList.remove("show");
+          void comboPayoutEl.offsetWidth;
+          comboPayoutEl.classList.add("show");
+          Sound.playComboCash(combo);
+        }
+        combo = 0;
+        updateComboHUD();
+      }
       let gameOver = false;
       let hasTimeJumped = false; // guards re-triggering the 88mph flash mid-boost
       let prevSpeed = 0; // previous frame's speed, for rising-edge 88mph detection
@@ -2888,8 +2946,7 @@
         crashCooldown = 0.6;
         crashFlashEl.classList.add("show");
         setTimeout(() => crashFlashEl.classList.remove("show"), 110);
-        combo = 0;
-        updateComboHUD();
+        cashInCombo();
         lives -= 1;
         updateLivesHUD();
         Sound.playCrash();
@@ -3185,8 +3242,8 @@
               if (Math.abs(g.mesh.position.z - CAR_Z) < 1.1 && Math.abs(g.mesh.position.x - car.position.x) < 1.25) {
                 g.collected = true;
                 g.mesh.visible = false;
-                combo = Math.min(combo + 1, 12);
-                score += 10 + Math.min(combo, 10) * 2;
+                combo += 1; // banked — cashed in when the combo breaks
+                score += GRAPE_POINTS;
                 triggerScorePop();
                 triggerComboPop();
                 updateComboHUD();
