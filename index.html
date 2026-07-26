@@ -446,6 +446,19 @@
         }
       }
 
+      /* every run gets a global placing, whether or not it made the top five */
+      #gameover-rank {
+        font-family: var(--font-display);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.26em;
+        color: var(--gold);
+        text-shadow: 0 0 14px rgba(255, 224, 102, 0.7);
+        margin-top: 12px;
+        padding-left: 0.26em;
+        min-height: 17px; /* hold the space while the count is in flight */
+      }
+
       /* ---------- Center overlays ---------- */
       .overlay-screen {
         position: fixed;
@@ -1469,11 +1482,8 @@
 
     <div id="center-overlay" class="overlay-screen">
       <h1>VESUVIO 88</h1>
-      <div class="subtitle" id="start-subtitle">GOLFO DI NAPOLI · 1985</div>
-      <p id="start-desc">
-        Corsa infinita al tramonto. Ogni uva vale 10 pt e alza la combo, incassata quando si spezza; la pizza ti rende invulnerabile,
-        Mr. Fusion ti spinge a +50 km/h. A 88 mph… salto temporale.
-      </p>
+      <div class="subtitle" id="start-subtitle">GOLFO DI NAPOLI · 1988</div>
+      <p id="start-desc">Corsa infinita al tramonto. Premi ? per vedere come si gioca.</p>
       <div class="leaderboard" id="start-leaderboard"></div>
       <div class="divider"></div>
       <div class="blink" id="start-blink">CARICAMENTO DELOREAN…</div>
@@ -1494,6 +1504,7 @@
     <div id="gameover-overlay" class="overlay-screen hidden">
       <h1 id="gameover-title">GAME OVER</h1>
       <div class="subtitle" id="gameover-score">0 PT</div>
+      <div id="gameover-rank"></div>
       <div class="leaderboard" id="gameover-leaderboard"></div>
       <div class="divider"></div>
       <div class="blink" id="gameover-blink">ENTER · SPAZIO · START PER RIPROVARE</div>
@@ -3120,8 +3131,8 @@
         it: {
           speed: "VELOCITÀ",
           score: "PUNTEGGIO",
-          subtitle: "GOLFO DI NAPOLI · 1985",
-          desc: "Corsa infinita al tramonto. Raccogli l'uva per fare combo, la pizza ti rende invulnerabile, la lattina vale una vita extra, Mr. Fusion ti spinge a +50 km/h. A 88 mph… salto temporale.",
+          subtitle: "GOLFO DI NAPOLI · 1988",
+          desc: "Corsa infinita al tramonto. Premi ? per vedere come si gioca.",
           loading: "CARICAMENTO DELOREAN…",
           pressStart: "PREMI ENTER O TOCCA LO SCHERMO PER PARTIRE",
           gameOver: "GAME OVER",
@@ -3136,6 +3147,9 @@
           initialsHelp: "scrivi le tue iniziali · ↑↓ cambia · INVIO conferma",
           confirm: "CONFERMA",
           rankLine: (place, pts) => `${place}° POSTO · ${pts} PT`,
+          globalRank: (n) => `POSIZIONE GLOBALE #${n}`,
+          rankPending: "CALCOLO POSIZIONE…",
+          rankOffline: "POSIZIONE NON DISPONIBILE",
           madeBy: "Creato da",
           settings: "IMPOSTAZIONI",
           language: "LINGUA",
@@ -3152,6 +3166,7 @@
           yourBest: (score, rank) => `Il tuo record: ${score} pt · posizione #${rank}`,
           showing: (n, total) => `${n} di ${total} punteggi`,
           items: [
+            ["🎮", "COMANDI", "Si gioca da telefono con i tasti a schermo, da tastiera o con un joypad. Il joypad viene riconosciuto da solo."],
             ["🍇", "UVA · +10 PT", "Ogni grappolo vale 10 punti e alza la combo di 1."],
             ["🔥", "COMBO", "La combo si incassa quando ti schianti o se non prendi uva per 3 secondi. Vale 10 punti per ogni passo: x5 = +50 punti."],
             ["🍕", "PIZZA · INVINCIBILE", "10 secondi di invincibilità. Se la prendi mentre sei già invincibile aggiunge 5 secondi. Un conto alla rovescia 3-2-1 avvisa quando sta per finire."],
@@ -3173,8 +3188,8 @@
         en: {
           speed: "SPEED",
           score: "SCORE",
-          subtitle: "GULF OF NAPLES · 1985",
-          desc: "An endless sunset run. Press ? for the rules.",
+          subtitle: "GULF OF NAPLES · 1988",
+          desc: "An endless sunset run. Press ? for how to play.",
           loading: "LOADING DELOREAN…",
           pressStart: "PRESS ENTER OR TAP THE SCREEN TO START",
           gameOver: "GAME OVER",
@@ -3189,6 +3204,9 @@
           initialsHelp: "type your initials · ↑↓ change · ENTER to confirm",
           confirm: "CONFIRM",
           rankLine: (place, pts) => `RANK ${place} · ${pts} PT`,
+          globalRank: (n) => `GLOBAL RANK #${n}`,
+          rankPending: "CALCULATING RANK…",
+          rankOffline: "RANK UNAVAILABLE",
           madeBy: "Made by",
           settings: "SETTINGS",
           language: "LANGUAGE",
@@ -3205,6 +3223,7 @@
           yourBest: (score, rank) => `Your best: ${score} pt · rank #${rank}`,
           showing: (n, total) => `${n} of ${total} scores`,
           items: [
+            ["🎮", "CONTROLS", "Play on a phone with the on-screen buttons, on a keyboard, or with a joypad. A joypad is picked up automatically."],
             ["🍇", "GRAPE · +10 PTS", "Each bunch is worth 10 points and adds 1 to your combo."],
             ["🔥", "COMBO", "Your combo cashes in when you crash, or if you go 3 seconds without a grape. It pays 10 points per step: x5 = +50 points."],
             ["🍕", "PIZZA · INVINCIBLE", "10 seconds of invincibility. Taken while already invincible it adds 5 more. A 3-2-1 countdown warns you before it ends."],
@@ -3364,6 +3383,23 @@
           return res.ok;
         } catch (e) {
           return false;
+        }
+      }
+
+      // Where this run lands among every score ever posted. Counting only the
+      // scores strictly above it means the answer does not depend on whether the
+      // player's own row has finished being written, and ties share a placing.
+      async function fetchGlobalRank(finalScore) {
+        try {
+          const res = await fetch(`${SB_ENDPOINT}?select=score&score=gt.${finalScore}&limit=1`, {
+            headers: { ...SB_HEADERS, Prefer: "count=exact" },
+            cache: "no-store",
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const total = parseInt((res.headers.get("content-range") || "").split("/")[1], 10);
+          return Number.isFinite(total) ? total + 1 : null;
+        } catch (e) {
+          return null;
         }
       }
 
@@ -3896,9 +3932,21 @@
         else showGameOverScreen(finalScore, -1);
       }
 
+      // Bumped per game over, so a slow rank lookup from an earlier run cannot
+      // land on a later one's screen.
+      let gameOverToken = 0;
       function showGameOverScreen(finalScore, highlightIndex) {
         document.getElementById("gameover-score").textContent = `${finalScore} PT`;
         renderLeaderboard(document.getElementById("gameover-leaderboard"), highlightIndex);
+
+        const token = ++gameOverToken;
+        const rankEl = document.getElementById("gameover-rank");
+        rankEl.textContent = t("rankPending");
+        fetchGlobalRank(finalScore).then((rank) => {
+          if (token !== gameOverToken) return;
+          rankEl.textContent = rank === null ? t("rankOffline") : t("globalRank")(rank);
+        });
+
         document.getElementById("gameover-overlay").classList.remove("hidden");
       }
 
