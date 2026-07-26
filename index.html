@@ -2403,6 +2403,7 @@
           document.getElementById("center-overlay").classList.add("hidden");
         }
         gameOver = false;
+        refreshGlobalBoard(); // pick up scores set by other players since last run
         flameTrailTimer = 5; // BTTF fire tracks for the opening seconds
         flameSpawnAccum = 0;
         started = true;
@@ -2611,6 +2612,8 @@
           sfx: "EFFETTI SONORI",
           close: "CHIUDI",
           top5: "TOP 5",
+          scopeGlobal: "GLOBALE",
+          scopeLocal: "LOCALE",
           noScores: "NESSUN PUNTEGGIO",
           distance: (m) => `${m} m percorsi`,
           record: (p) => `record ${p} pt`,
@@ -2642,6 +2645,8 @@
           sfx: "SOUND EFFECTS",
           close: "CLOSE",
           top5: "TOP 5",
+          scopeGlobal: "GLOBAL",
+          scopeLocal: "OFFLINE",
           noScores: "NO SCORES YET",
           distance: (m) => `${m} m travelled`,
           record: (p) => `best ${p} pt`,
@@ -2707,51 +2712,106 @@
         comboValueEl.classList.add("pop");
       }
 
-      // ---------- Local top-5 leaderboard ----------
+      // ---------- Global top-5 leaderboard (Supabase) ----------
+      // The board is fetched into a cache so the game never blocks on the
+      // network mid-run. localStorage is kept as an offline mirror: if the
+      // fetch fails the player still sees (and sets) their own local scores.
       const LEADERBOARD_SIZE = 5;
-      // Entries are { name, score }. Scores saved by older builds were bare
-      // numbers, so those are migrated to a placeholder name on read.
-      function loadLeaderboard() {
+      const SB_URL = "https://qtglbgdsszthpiegtxuc.supabase.co";
+      const SB_KEY = "sb_publishable_TjcvVnSJLxyCwSreqkG7VQ_XPbbRv6K";
+      const SB_HEADERS = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
+      const SB_ENDPOINT = `${SB_URL}/rest/v1/scores`;
+
+      let cachedBoard = [];
+      let boardIsGlobal = false; // false => showing the offline mirror
+
+      function normalizeEntries(raw) {
+        if (!Array.isArray(raw)) return [];
+        return raw
+          .map((e) =>
+            Number.isFinite(e)
+              ? { name: "---", score: e } // scores saved by pre-initials builds
+              : e && Number.isFinite(e.score)
+                ? { name: String(e.name || "---").slice(0, 3), score: e.score }
+                : null,
+          )
+          .filter(Boolean)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, LEADERBOARD_SIZE);
+      }
+      function loadLocalBoard() {
         try {
-          const raw = JSON.parse(localStorage.getItem("outrunLeaderboard") || "[]");
-          if (!Array.isArray(raw)) return [];
-          return raw
-            .map((e) =>
-              Number.isFinite(e)
-                ? { name: "---", score: e }
-                : e && Number.isFinite(e.score)
-                  ? { name: String(e.name || "---").slice(0, 3), score: e.score }
-                  : null,
-            )
-            .filter(Boolean)
-            .slice(0, LEADERBOARD_SIZE);
+          return normalizeEntries(JSON.parse(localStorage.getItem("outrunLeaderboard") || "[]"));
         } catch (e) {
           return [];
         }
       }
-      function saveLeaderboard(list) {
+      function saveLocalBoard(list) {
         try {
           localStorage.setItem("outrunLeaderboard", JSON.stringify(list));
         } catch (e) {
           /* storage unavailable */
         }
       }
+
+      // Synchronous read used everywhere else in the game.
+      function loadLeaderboard() {
+        return cachedBoard;
+      }
+
+      async function refreshGlobalBoard() {
+        try {
+          const res = await fetch(
+            `${SB_ENDPOINT}?select=name,score&order=score.desc&limit=${LEADERBOARD_SIZE}`,
+            { headers: SB_HEADERS, cache: "no-store" },
+          );
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          cachedBoard = normalizeEntries(await res.json());
+          boardIsGlobal = true;
+          saveLocalBoard(cachedBoard); // keep a copy for offline play
+        } catch (e) {
+          boardIsGlobal = false;
+          cachedBoard = loadLocalBoard();
+        }
+        renderLeaderboard(document.getElementById("start-leaderboard"));
+        recordValueEl.textContent = t("record")(cachedBoard[0]?.score || 0);
+        return cachedBoard;
+      }
+
+      async function postGlobalScore(name, finalScore) {
+        try {
+          const res = await fetch(SB_ENDPOINT, {
+            method: "POST",
+            headers: { ...SB_HEADERS, "Content-Type": "application/json", Prefer: "return=minimal" },
+            body: JSON.stringify({ name, score: finalScore }),
+          });
+          return res.ok;
+        } catch (e) {
+          return false;
+        }
+      }
+
       // True when the score earns a place, so we only ask for initials then.
       function qualifiesForLeaderboard(finalScore) {
         if (finalScore <= 0) return false;
         const list = loadLeaderboard();
         return list.length < LEADERBOARD_SIZE || finalScore > list[list.length - 1].score;
       }
-      // Returns the row index the new entry landed on, for highlighting.
+
+      // Optimistically place the entry so the UI can highlight it immediately,
+      // then send it and re-sync from the server.
       function submitScore(name, finalScore) {
-        const list = loadLeaderboard();
         const entry = { name, score: finalScore };
-        list.push(entry);
-        list.sort((a, b) => b.score - a.score);
-        const top = list.slice(0, LEADERBOARD_SIZE);
-        saveLeaderboard(top);
-        return top.indexOf(entry);
+        const list = [...cachedBoard, entry].sort((a, b) => b.score - a.score);
+        cachedBoard = list.slice(0, LEADERBOARD_SIZE);
+        const index = cachedBoard.indexOf(entry);
+        saveLocalBoard(cachedBoard);
+        postGlobalScore(name, finalScore).then((ok) => {
+          if (ok) refreshGlobalBoard();
+        });
+        return index;
       }
+
       function renderLeaderboard(container, highlightIndex) {
         const list = loadLeaderboard();
         const rows = list.length
@@ -2762,11 +2822,15 @@
               })
               .join("")
           : `<div class="lb-row"><span class="lb-rank">—</span><span>${t("noScores")}</span></div>`;
-        container.innerHTML = `<div class="lb-title">${t("top5")}</div>${rows}`;
+        const scope = boardIsGlobal ? t("scopeGlobal") : t("scopeLocal");
+        container.innerHTML = `<div class="lb-title">${t("top5")} · ${scope}</div>${rows}`;
       }
+
+      cachedBoard = loadLocalBoard(); // show something instantly
       renderLeaderboard(document.getElementById("start-leaderboard"));
-      const bestScore = loadLeaderboard()[0]?.score || 0;
+      const bestScore = cachedBoard[0]?.score || 0;
       recordValueEl.textContent = t("record")(bestScore);
+      refreshGlobalBoard(); // then swap in the global board when it arrives
 
       // ---------- Arcade initials entry ----------
       // Shown only when a run places in the top five. Accepts typed letters,
@@ -2806,7 +2870,7 @@
         const name = initialsLetters.join("");
         const index = submitScore(name, initialsPendingScore);
         renderLeaderboard(document.getElementById("start-leaderboard"));
-        recordValueEl.textContent = t("record")(loadLeaderboard()[0]?.score || 0);
+        recordValueEl.textContent = t("record")(cachedBoard[0]?.score || 0);
         showGameOverScreen(initialsPendingScore, index);
         Sound.playExtraLife();
       }
@@ -2897,7 +2961,7 @@
         document.getElementById("set-music-label").textContent = t("music");
         document.getElementById("set-sfx-label").textContent = t("sfx");
         document.getElementById("settings-close").textContent = t("close");
-        recordValueEl.textContent = t("record")(Math.max(bestScore, Math.floor(score || 0)));
+        recordValueEl.textContent = t("record")(cachedBoard[0]?.score || 0);
         distanceValueEl.textContent = t("distance")(Math.floor(distance || 0));
         renderLeaderboard(document.getElementById("start-leaderboard"));
         document
