@@ -2,7 +2,10 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <title>VESUVIO 88 — Three.js Showcase</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -29,6 +32,13 @@
         margin: 0;
         height: 100%;
         overflow: hidden;
+        /* iOS ignores user-scalable=no, so gestures are blocked here and in JS */
+        touch-action: manipulation;
+        overscroll-behavior: none;
+        -webkit-touch-callout: none;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
         background: #05010f;
         font-family: var(--font-ui);
         color: #eaf2ff;
@@ -38,6 +48,7 @@
       }
       canvas {
         display: block;
+        touch-action: none;
       }
 
       /* ---------- CRT scanline / vignette overlay ---------- */
@@ -275,6 +286,48 @@
         100% {
           opacity: 0;
           transform: translateY(-14px) scale(1);
+        }
+      }
+
+      /* narrow phones: the two panels must fit side by side without clipping */
+      @media (max-width: 520px) {
+        #hud {
+          padding: 9px 9px;
+          gap: 6px;
+        }
+        .panel,
+        .panel.right {
+          min-width: 0;
+          padding: 8px 11px;
+        }
+        .hud-label {
+          font-size: 8px;
+          letter-spacing: 0.16em;
+        }
+        .hud-value {
+          font-size: 27px;
+        }
+        .hud-unit {
+          font-size: 9.5px;
+          letter-spacing: 0.05em;
+        }
+        #speed-bar {
+          height: 3px;
+        }
+        .pip {
+          width: 11px;
+          height: 5px;
+        }
+        .status-row {
+          gap: 5px;
+          margin-top: 6px;
+        }
+        #combo-value {
+          font-size: 10px;
+          padding: 2px 6px;
+        }
+        #combo-payout {
+          font-size: 14px;
         }
       }
 
@@ -825,6 +878,7 @@
       }
       .slider-row input[type="range"] {
         flex: 1;
+        touch-action: pan-x;
         -webkit-appearance: none;
         appearance: none;
         height: 5px;
@@ -2414,6 +2468,45 @@
         e.preventDefault();
         useFusionBoost();
       });
+
+      // ---------- Block browser zoom gestures ----------
+      // iOS Safari ignores user-scalable=no, so pinch and double-tap have to be
+      // cancelled explicitly or hammering the touch buttons zooms the page.
+      ["gesturestart", "gesturechange", "gestureend"].forEach((evt) =>
+        document.addEventListener(evt, (e) => e.preventDefault(), { passive: false }),
+      );
+
+      let lastTouchEnd = 0;
+      document.addEventListener(
+        "touchend",
+        (e) => {
+          const now = Date.now();
+          if (now - lastTouchEnd < 350) e.preventDefault(); // second tap of a double-tap
+          lastTouchEnd = now;
+        },
+        { passive: false },
+      );
+
+      // two-finger touches are only ever a pinch here
+      document.addEventListener(
+        "touchmove",
+        (e) => {
+          if (e.touches.length > 1) e.preventDefault();
+        },
+        { passive: false },
+      );
+
+      // long-press context menu gets in the way of held buttons
+      document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+      // desktop: ctrl/⌘ + wheel is browser zoom
+      document.addEventListener(
+        "wheel",
+        (e) => {
+          if (e.ctrlKey || e.metaKey) e.preventDefault();
+        },
+        { passive: false },
+      );
 
       // ---------- Gamepad (standard mapping) ----------
       // Polled once per frame and merged with keyboard/touch, so any control
