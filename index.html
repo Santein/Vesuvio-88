@@ -33,7 +33,7 @@
         height: 100%;
         overflow: hidden;
         /* iOS ignores user-scalable=no, so gestures are blocked here and in JS */
-        touch-action: manipulation;
+        touch-action: none;
         overscroll-behavior: none;
         -webkit-touch-callout: none;
         -webkit-text-size-adjust: 100%;
@@ -255,6 +255,26 @@
         100% {
           transform: scale(1);
         }
+      }
+
+      #combo-timer-track {
+        height: 3px;
+        width: 74px;
+        margin-top: 3px;
+        margin-left: auto;
+        background: rgba(255, 255, 255, 0.12);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        transform: skewX(-20deg);
+      }
+      #combo-timer-track.show {
+        opacity: 1;
+      }
+      #combo-timer {
+        height: 100%;
+        width: 100%;
+        background: linear-gradient(90deg, #ffb347, var(--gold));
+        box-shadow: 0 0 8px rgba(255, 224, 102, 0.9);
       }
 
       #combo-payout {
@@ -769,10 +789,11 @@
       }
 
       /* ---------- Settings button ---------- */
-      #settings-btn {
+      #settings-btn,
+      #info-btn,
+      #board-btn {
         position: fixed;
         top: 50%;
-        right: 10px;
         transform: translateY(-50%);
         width: 34px;
         height: 34px;
@@ -792,9 +813,211 @@
         opacity: 0.65;
         transition: opacity 0.2s ease;
       }
-      #settings-btn:hover {
+      #settings-btn:hover,
+      #info-btn:hover,
+      #board-btn:hover {
         opacity: 1;
         box-shadow: 0 0 18px var(--palm-azure);
+      }
+      #settings-btn { right: 10px; }
+      #info-btn { right: 10px; margin-top: -42px; font-weight: 700; }
+      #board-btn { left: 10px; }
+
+      /* ---------- Shared panel shell (settings / how-to-play / leaderboard) ---------- */
+      .panel-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(4, 1, 12, 0.78);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        transition: opacity 0.25s ease;
+      }
+      .panel-overlay.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .game-panel {
+        display: flex;
+        flex-direction: column;
+        width: min(440px, 94vw);
+        max-height: min(78vh, 620px);
+        padding: 24px 26px 22px;
+        background: linear-gradient(150deg, rgba(30, 12, 60, 0.96), rgba(12, 4, 28, 0.96));
+        border: 1px solid rgba(120, 200, 255, 0.25);
+        border-top: 2px solid var(--cyan);
+        clip-path: polygon(0 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%);
+        box-shadow: 0 0 50px rgba(53, 242, 255, 0.15);
+      }
+      .game-panel h2 {
+        margin: 0 0 18px;
+        font-family: var(--font-display);
+        font-size: 15px;
+        font-weight: 900;
+        letter-spacing: 0.26em;
+        color: var(--cyan);
+        text-shadow: 0 0 14px rgba(53, 242, 255, 0.7);
+      }
+      .panel-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        touch-action: pan-y; /* keep scrolling while page gestures are blocked */
+        -webkit-overflow-scrolling: touch;
+        padding-right: 4px;
+      }
+      .panel-body::-webkit-scrollbar {
+        width: 5px;
+      }
+      .panel-body::-webkit-scrollbar-thumb {
+        background: rgba(120, 200, 255, 0.35);
+      }
+      .panel-close {
+        flex: none;
+        width: 100%;
+        margin-top: 16px;
+        padding: 11px 0;
+        font-family: var(--font-display);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.2em;
+        color: #1a0616;
+        background: linear-gradient(180deg, #ffa6dc, var(--pink));
+        border: none;
+        cursor: pointer;
+        box-shadow: 0 0 20px rgba(255, 63, 176, 0.5);
+        clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+      }
+
+      /* how-to-play */
+      .info-intro {
+        margin: 0 0 16px;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: rgba(215, 233, 255, 0.7);
+      }
+      .info-item {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 10px 0;
+        border-top: 1px solid rgba(120, 200, 255, 0.12);
+      }
+      .info-icon {
+        font-size: 20px;
+        line-height: 1.2;
+        width: 26px;
+        text-align: center;
+        flex: none;
+      }
+      .info-text b {
+        display: block;
+        font-family: var(--font-display);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: var(--cyan);
+        margin-bottom: 3px;
+      }
+      .info-text.warn b {
+        color: #ff6b8a;
+      }
+      .info-text span {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: rgba(212, 230, 255, 0.72);
+      }
+
+      /* leaderboard browser */
+      #board-search {
+        flex: none;
+        width: 100%;
+        margin-bottom: 12px;
+        padding: 9px 12px;
+        font-family: var(--font-display);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-align: center;
+        text-transform: uppercase;
+        color: var(--gold);
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(120, 200, 255, 0.25);
+        outline: none;
+      }
+      #board-search:focus {
+        border-color: var(--cyan);
+        box-shadow: 0 0 14px rgba(53, 242, 255, 0.35);
+      }
+      #board-summary {
+        flex: none;
+        min-height: 16px;
+        margin-bottom: 10px;
+        font-family: var(--font-display);
+        font-size: 10.5px;
+        letter-spacing: 0.12em;
+        color: rgba(255, 224, 102, 0.8);
+        text-align: center;
+      }
+      .board-row {
+        display: grid;
+        grid-template-columns: 42px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 7px 10px;
+        margin-bottom: 3px;
+        font-family: var(--font-display);
+        font-size: 12.5px;
+        font-weight: 700;
+        color: rgba(255, 236, 180, 0.85);
+        background: linear-gradient(90deg, rgba(255, 224, 102, 0.07), transparent);
+        border-left: 2px solid rgba(255, 224, 102, 0.35);
+        font-variant-numeric: tabular-nums;
+      }
+      .board-row.top1 {
+        color: #fff4c4;
+        border-left-color: var(--gold);
+        background: linear-gradient(90deg, rgba(255, 224, 102, 0.2), transparent);
+      }
+      .board-row .br-rank {
+        opacity: 0.55;
+        font-size: 11px;
+      }
+      .board-row .br-date {
+        font-family: var(--font-ui);
+        font-size: 10px;
+        font-weight: 500;
+        opacity: 0.45;
+      }
+      .board-more {
+        width: 100%;
+        margin-top: 8px;
+        padding: 9px 0;
+        font-family: var(--font-display);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        color: var(--cyan);
+        background: rgba(53, 242, 255, 0.08);
+        border: 1px solid rgba(53, 242, 255, 0.3);
+        cursor: pointer;
+      }
+      .board-more:hover {
+        background: rgba(53, 242, 255, 0.16);
+      }
+      .board-more.hidden {
+        display: none;
+      }
+      .board-empty {
+        padding: 18px 0;
+        text-align: center;
+        font-size: 12px;
+        color: rgba(212, 230, 255, 0.5);
       }
 
       /* ---------- Settings panel ---------- */
@@ -1057,6 +1280,7 @@
         <div class="hud-unit" id="distance-value">0 m percorsi</div>
         <div class="hud-unit" id="record-value">record 0 pt</div>
         <div id="combo-value">COMBO x1</div>
+        <div id="combo-timer-track"><div id="combo-timer"></div></div>
         <div id="combo-payout">+0</div>
       </div>
     </div>
@@ -1079,10 +1303,36 @@
     <div id="timejump-flash"></div>
 
     <div id="pad-toast">🎮 GAMEPAD COLLEGATO</div>
+    <button id="info-btn" aria-label="come si gioca">?</button>
     <button id="settings-btn" aria-label="impostazioni">⚙</button>
+    <button id="board-btn" aria-label="classifica">🏆</button>
 
-    <div id="settings-overlay" class="hidden">
-      <div id="settings-panel">
+    <div id="info-overlay" class="panel-overlay hidden">
+      <div class="game-panel">
+        <h2 id="info-title">COME SI GIOCA</h2>
+        <div class="panel-body" data-scrollable>
+          <p class="info-intro" id="info-intro"></p>
+          <div id="info-items"></div>
+        </div>
+        <button class="panel-close" id="info-close">CHIUDI</button>
+      </div>
+    </div>
+
+    <div id="board-overlay" class="panel-overlay hidden">
+      <div class="game-panel">
+        <h2 id="board-title">CLASSIFICA GLOBALE</h2>
+        <input type="text" id="board-search" maxlength="3" placeholder="ABC" autocomplete="off" spellcheck="false" />
+        <div id="board-summary"></div>
+        <div class="panel-body" data-scrollable>
+          <div id="board-rows"></div>
+          <button id="board-more" class="board-more">CARICA ALTRI</button>
+        </div>
+        <button class="panel-close" id="board-close">CHIUDI</button>
+      </div>
+    </div>
+
+    <div id="settings-overlay" class="panel-overlay hidden">
+      <div class="game-panel" id="settings-panel">
         <h2 id="set-title">IMPOSTAZIONI</h2>
 
         <div class="set-row">
@@ -2419,8 +2669,11 @@
         if (e.code === "ArrowRight" || e.code === "KeyD") input.right = true;
         if (e.code === "ArrowDown" || e.code === "KeyS") input.brake = true;
         if (e.code === "ShiftLeft" || e.code === "ShiftRight") input.drift = true;
-        if (e.code === "Escape" && settingsOpen) closeSettings();
-        if (settingsOpen) return; // the panel swallows start/boost while open
+        if (e.code === "Escape" && settingsOpen) {
+          [infoOverlayEl, boardOverlayEl].forEach((o) => closePanel(o));
+          closeSettings();
+        }
+        if (settingsOpen || e.target === boardSearchEl) return; // panels swallow gameplay keys
         if (e.code === "Enter") startGame();
         if (e.code === "Space" && !e.repeat) {
           e.preventDefault();
@@ -2478,15 +2731,19 @@
       );
 
       let lastTouchEnd = 0;
-      document.addEventListener(
-        "touchend",
-        (e) => {
-          const now = Date.now();
-          if (now - lastTouchEnd < 350) e.preventDefault(); // second tap of a double-tap
-          lastTouchEnd = now;
-        },
-        { passive: false },
-      );
+      // Cancel the second tap of a double-tap at BOTH ends of the gesture; iOS
+      // decides to zoom on touchstart, so touchend alone is not enough.
+      function guardDoubleTap(e) {
+        const now = Date.now();
+        if (now - lastTouchEnd < 400 && !isScrollable(e.target)) e.preventDefault();
+        if (e.type === "touchend") lastTouchEnd = now;
+      }
+      // anything the player is meant to be able to scroll must keep its gestures
+      function isScrollable(el) {
+        return !!(el && el.closest && el.closest("[data-scrollable], input[type=range]"));
+      }
+      document.addEventListener("touchstart", guardDoubleTap, { passive: false });
+      document.addEventListener("touchend", guardDoubleTap, { passive: false });
 
       // two-finger touches are only ever a pinch here
       document.addEventListener(
@@ -2612,8 +2869,27 @@
           sfx: "EFFETTI SONORI",
           close: "CHIUDI",
           top5: "TOP 5",
-          scopeGlobal: "GLOBALE",
-          scopeLocal: "LOCALE",
+          howTo: "COME SI GIOCA",
+          howToIntro: "Corri più a lungo che puoi sul Golfo di Napoli. Sopravvivi, raccogli, evita.",
+          boardTitle: "CLASSIFICA GLOBALE",
+          searchHint: "cerca le tue iniziali",
+          loadMore: "CARICA ALTRI",
+          noResults: "Nessun risultato",
+          yourBest: (score, rank) => `Il tuo record: ${score} pt · posizione #${rank}`,
+          showing: (n, total) => `${n} di ${total} punteggi`,
+          items: [
+            ["🍇", "UVA · +10 PT", "Ogni grappolo vale 10 punti e alza la combo di 1."],
+            ["🔥", "COMBO", "La combo si incassa quando ti schianti o se non prendi uva per 3 secondi. Vale 10 punti per ogni passo: x5 = +50 punti."],
+            ["🍕", "PIZZA · INVINCIBILE", "10 secondi di invincibilità. Se la prendi mentre sei già invincibile aggiunge 5 secondi. Un conto alla rovescia 3-2-1 avvisa quando sta per finire."],
+            ["🥤", "LATTINA · +1 VITA", "Una vita extra, fino a un massimo di 6. Se hai già tutte le vite non viene raccolta."],
+            ["⚛", "MR. FUSION · +50 KM/H", "Puoi tenerne fino a 3. Premi SPAZIO per usarne uno e avere una spinta di 50 km/h."],
+            ["⚡", "88 MPH · SALTO TEMPORALE", "Superando gli 88 mph parte il salto temporale: ti teletrasporta 20 metri più avanti."],
+            ["🪨", "OSTACOLI", "Le rocce rosa ti fanno perdere una vita e azzerano la combo. Evitale."],
+            ["🚗", "TRAFFICO", "Le auto più lente sono ostacoli come le rocce. Sorpassale."],
+            ["🛣️", "FUORIPISTA", "Fuori dall'asfalto rallenti molto. Resta in carreggiata, soprattutto in curva."],
+          ],
+          scopeGlobal: "CLASSIFICA GLOBALE",
+          scopeLocal: "CLASSIFICA OFFLINE",
           noScores: "NESSUN PUNTEGGIO",
           distance: (m) => `${m} m percorsi`,
           record: (p) => `record ${p} pt`,
@@ -2623,7 +2899,7 @@
           speed: "SPEED",
           score: "SCORE",
           subtitle: "GULF OF NAPLES · 1985",
-          desc: "An endless sunset run. Each grape is 10 pts and builds a combo, cashed in when it breaks; pizza makes you invincible, a soda can is an extra life, Mr. Fusion pushes you +50 km/h. At 88 mph… time jump.",
+          desc: "An endless sunset run. Press ? for the rules.",
           loading: "LOADING DELOREAN…",
           pressStart: "PRESS ENTER OR TAP THE SCREEN TO START",
           gameOver: "GAME OVER",
@@ -2645,8 +2921,27 @@
           sfx: "SOUND EFFECTS",
           close: "CLOSE",
           top5: "TOP 5",
-          scopeGlobal: "GLOBAL",
-          scopeLocal: "OFFLINE",
+          howTo: "HOW TO PLAY",
+          howToIntro: "Drive as far as you can along the Gulf of Naples. Survive, collect, avoid.",
+          boardTitle: "GLOBAL LEADERBOARD",
+          searchHint: "search your initials",
+          loadMore: "LOAD MORE",
+          noResults: "No results",
+          yourBest: (score, rank) => `Your best: ${score} pt · rank #${rank}`,
+          showing: (n, total) => `${n} of ${total} scores`,
+          items: [
+            ["🍇", "GRAPE · +10 PTS", "Each bunch is worth 10 points and adds 1 to your combo."],
+            ["🔥", "COMBO", "Your combo cashes in when you crash, or if you go 3 seconds without a grape. It pays 10 points per step: x5 = +50 points."],
+            ["🍕", "PIZZA · INVINCIBLE", "10 seconds of invincibility. Taken while already invincible it adds 5 more. A 3-2-1 countdown warns you before it ends."],
+            ["🥤", "SODA CAN · +1 LIFE", "One extra life, up to a maximum of 6. If your lives are full it is left on the road."],
+            ["⚛", "MR. FUSION · +50 KM/H", "Hold up to 3. Press SPACE to spend one for a 50 km/h boost."],
+            ["⚡", "88 MPH · TIME JUMP", "Cross 88 mph and the time jump fires, teleporting you 20 metres ahead."],
+            ["🪨", "OBSTACLES", "Pink rocks cost you a life and reset your combo. Dodge them."],
+            ["🚗", "TRAFFIC", "Slower cars hurt just like rocks. Overtake them."],
+            ["🛣️", "OFF-ROAD", "Off the asphalt you slow right down. Stay on the road, especially through bends."],
+          ],
+          scopeGlobal: "GLOBAL LEADERBOARD",
+          scopeLocal: "OFFLINE LEADERBOARD",
           noScores: "NO SCORES YET",
           distance: (m) => `${m} m travelled`,
           record: (p) => `best ${p} pt`,
@@ -2672,6 +2967,8 @@
       const recordValueEl = document.getElementById("record-value");
       const comboValueEl = document.getElementById("combo-value");
       const comboPayoutEl = document.getElementById("combo-payout");
+      const comboTimerEl = document.getElementById("combo-timer");
+      const comboTimerTrackEl = document.getElementById("combo-timer-track");
       const crashFlashEl = document.getElementById("crash-flash");
       const pizzaFlashEl = document.getElementById("pizza-flash");
       const invulnBannerEl = document.getElementById("invuln-banner");
@@ -2699,6 +2996,7 @@
         fusionSlotEls.forEach((el, i) => el.classList.toggle("empty", i >= fusionStock));
       }
       function updateComboHUD() {
+        comboTimerTrackEl.classList.toggle("show", combo > 0);
         if (combo > 1) {
           comboValueEl.textContent = `COMBO x${combo}`;
           comboValueEl.classList.add("show");
@@ -2823,7 +3121,7 @@
               .join("")
           : `<div class="lb-row"><span class="lb-rank">—</span><span>${t("noScores")}</span></div>`;
         const scope = boardIsGlobal ? t("scopeGlobal") : t("scopeLocal");
-        container.innerHTML = `<div class="lb-title">${t("top5")} · ${scope}</div>${rows}`;
+        container.innerHTML = `<div class="lb-title">${scope}</div>${rows}`;
       }
 
       cachedBoard = loadLocalBoard(); // show something instantly
@@ -2964,6 +3262,8 @@
         recordValueEl.textContent = t("record")(cachedBoard[0]?.score || 0);
         distanceValueEl.textContent = t("distance")(Math.floor(distance || 0));
         renderLeaderboard(document.getElementById("start-leaderboard"));
+        renderInfo();
+        renderBoardChrome();
         document
           .querySelectorAll(".lang-btn")
           .forEach((b) => b.classList.toggle("active", b.dataset.lang === lang));
@@ -3002,6 +3302,122 @@
         sfxValEl.textContent = `${sfxSliderEl.value}%`;
       });
 
+      // ---------- How-to-play panel ----------
+      const infoOverlayEl = document.getElementById("info-overlay");
+      function renderInfo() {
+        document.getElementById("info-title").textContent = t("howTo");
+        document.getElementById("info-intro").textContent = t("howToIntro");
+        document.getElementById("info-items").innerHTML = t("items")
+          .map(([icon, title, body]) => {
+            const warn = ["🪨", "🚗", "🛣️"].includes(icon) ? " warn" : "";
+            return `<div class="info-item"><div class="info-icon">${icon}</div>
+              <div class="info-text${warn}"><b>${title}</b><span>${body}</span></div></div>`;
+          })
+          .join("");
+        document.getElementById("info-close").textContent = t("close");
+      }
+
+      // ---------- Full leaderboard browser ----------
+      const boardOverlayEl = document.getElementById("board-overlay");
+      const boardRowsEl = document.getElementById("board-rows");
+      const boardMoreEl = document.getElementById("board-more");
+      const boardSearchEl = document.getElementById("board-search");
+      const boardSummaryEl = document.getElementById("board-summary");
+      const BOARD_PAGE = 25;
+      let boardOffset = 0;
+      let boardFilter = "";
+      let boardTotal = 0;
+
+      function boardQuery(offset, filter) {
+        const params = [`select=name,score,created_at`, `order=score.desc`, `limit=${BOARD_PAGE}`, `offset=${offset}`];
+        if (filter) params.push(`name=ilike.*${encodeURIComponent(filter)}*`);
+        return `${SB_ENDPOINT}?${params.join("&")}`;
+      }
+
+      async function loadBoardPage(reset) {
+        if (reset) {
+          boardOffset = 0;
+          boardRowsEl.innerHTML = "";
+        }
+        try {
+          const res = await fetch(boardQuery(boardOffset, boardFilter), {
+            headers: { ...SB_HEADERS, Prefer: "count=exact" },
+            cache: "no-store",
+          });
+          if (!res.ok) throw new Error(res.status);
+          const rows = await res.json();
+          // Content-Range looks like "0-24/137"
+          const range = res.headers.get("content-range") || "";
+          const total = parseInt(range.split("/")[1], 10);
+          if (Number.isFinite(total)) boardTotal = total;
+
+          if (reset && rows.length === 0) {
+            boardRowsEl.innerHTML = `<div class="board-empty">${t("noResults")}</div>`;
+          } else {
+            boardRowsEl.insertAdjacentHTML(
+              "beforeend",
+              rows
+                .map((r, i) => {
+                  const rank = boardOffset + i + 1;
+                  const date = new Date(r.created_at).toLocaleDateString(lang === "it" ? "it-IT" : "en-GB");
+                  const top = !boardFilter && rank === 1 ? " top1" : "";
+                  return `<div class="board-row${top}"><span class="br-rank">${boardFilter ? "" : "#" + rank}</span>
+                    <span>${r.name}</span><span>${r.score} PT <span class="br-date">${date}</span></span></div>`;
+                })
+                .join(""),
+            );
+          }
+          boardOffset += rows.length;
+          boardMoreEl.classList.toggle("hidden", boardOffset >= boardTotal || rows.length === 0);
+          boardSummaryEl.textContent = boardTotal ? t("showing")(Math.min(boardOffset, boardTotal), boardTotal) : "";
+        } catch (e) {
+          boardRowsEl.innerHTML = `<div class="board-empty">${t("scopeLocal")}</div>`;
+          boardMoreEl.classList.add("hidden");
+        }
+      }
+
+      // one extra query gives the searched player their true global position
+      async function showSearchRank(name) {
+        boardSummaryEl.textContent = "";
+        if (!name) return;
+        try {
+          const best = await fetch(
+            `${SB_ENDPOINT}?select=score&name=ilike.*${encodeURIComponent(name)}*&order=score.desc&limit=1`,
+            { headers: SB_HEADERS, cache: "no-store" },
+          ).then((r) => r.json());
+          if (!best.length) return;
+          const better = await fetch(`${SB_ENDPOINT}?select=score&score=gt.${best[0].score}`, {
+            headers: { ...SB_HEADERS, Prefer: "count=exact" },
+            cache: "no-store",
+          });
+          const total = parseInt((better.headers.get("content-range") || "").split("/")[1], 10);
+          boardSummaryEl.textContent = t("yourBest")(best[0].score, (Number.isFinite(total) ? total : 0) + 1);
+        } catch (e) {
+          /* summary is optional */
+        }
+      }
+
+      function renderBoardChrome() {
+        document.getElementById("board-title").textContent = t("boardTitle");
+        document.getElementById("board-close").textContent = t("close");
+        boardMoreEl.textContent = t("loadMore");
+        boardSearchEl.placeholder = t("searchHint");
+      }
+
+      let searchDebounce = null;
+      boardSearchEl.addEventListener("input", () => {
+        boardFilter = boardSearchEl.value.trim().toUpperCase();
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+          loadBoardPage(true);
+          showSearchRank(boardFilter);
+        }, 250);
+      });
+      boardMoreEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        loadBoardPage(false);
+      });
+
       function openSettings() {
         settingsOpen = true;
         settingsOverlayEl.classList.remove("hidden");
@@ -3012,6 +3428,46 @@
         settingsOpen = false;
         settingsOverlayEl.classList.add("hidden");
       }
+      function openPanel(overlay) {
+        settingsOpen = true; // shares the pause flag: the sim halts while any panel is open
+        overlay.classList.remove("hidden");
+        Sound.setDrift(false);
+      }
+      function closePanel(overlay) {
+        overlay.classList.add("hidden");
+        settingsOpen = ![infoOverlayEl, boardOverlayEl, settingsOverlayEl].every((o) =>
+          o.classList.contains("hidden"),
+        );
+      }
+      document.getElementById("info-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        renderInfo();
+        openPanel(infoOverlayEl);
+      });
+      document.getElementById("info-close").addEventListener("click", (e) => {
+        e.stopPropagation();
+        closePanel(infoOverlayEl);
+      });
+      infoOverlayEl.addEventListener("pointerdown", (e) => {
+        if (e.target === infoOverlayEl) closePanel(infoOverlayEl);
+      });
+
+      document.getElementById("board-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        renderBoardChrome();
+        boardSearchEl.value = "";
+        boardFilter = "";
+        openPanel(boardOverlayEl);
+        loadBoardPage(true);
+      });
+      document.getElementById("board-close").addEventListener("click", (e) => {
+        e.stopPropagation();
+        closePanel(boardOverlayEl);
+      });
+      boardOverlayEl.addEventListener("pointerdown", (e) => {
+        if (e.target === boardOverlayEl) closePanel(boardOverlayEl);
+      });
+
       document.getElementById("settings-btn").addEventListener("click", (e) => {
         e.stopPropagation();
         Sound.init(); // first interaction may be the gear, so unlock audio here too
@@ -3037,7 +3493,9 @@
       let invulnerable = 0; // seconds of pizza-powered invulnerability remaining
       let lives = START_LIVES;
       let combo = 0;
-      const GRAPE_POINTS = 10; // one grape = 10 pts, and one combo step is worth the same
+      const GRAPE_POINTS = 10;
+      const COMBO_TIMEOUT = 3; // seconds without a grape before the combo cashes itself out
+      let comboTimer = 0; // one grape = 10 pts, and one combo step is worth the same
 
       // A combo is banked while you keep collecting; breaking it pays out its
       // grape-equivalent, so x3 hands you 3 x 10 = 30 points.
@@ -3053,6 +3511,7 @@
           Sound.playComboCash(combo);
         }
         combo = 0;
+        comboTimer = 0;
         updateComboHUD();
       }
       let gameOver = false;
@@ -3147,6 +3606,7 @@
         invulnerable = 0;
         lives = START_LIVES;
         combo = 0;
+        comboTimer = 0;
         hasTimeJumped = false;
         prevSpeed = 0;
         timeJumpFovBoost = 0;
@@ -3233,6 +3693,13 @@
 
           distance += speed * dt;
           score += dt; // 1 point per second survived
+
+          // a combo lapses if no grape is taken in time
+          if (combo > 0) {
+            comboTimer -= dt;
+            if (comboTimer <= 0) cashInCombo();
+            else comboTimerEl.style.width = `${(comboTimer / COMBO_TIMEOUT) * 100}%`;
+          }
 
           // 88mph: fires only on the frame the car crosses UP through the threshold,
           // never while merely sitting above it. Re-arms once speed falls back under.
@@ -3399,7 +3866,8 @@
               if (Math.abs(g.mesh.position.z - CAR_Z) < 1.1 && Math.abs(g.mesh.position.x - car.position.x) < 1.25) {
                 g.collected = true;
                 g.mesh.visible = false;
-                combo += 1; // banked — cashed in when the combo breaks
+                combo += 1; // banked — cashed in when the combo breaks or lapses
+                comboTimer = COMBO_TIMEOUT;
                 score += GRAPE_POINTS;
                 triggerScorePop();
                 triggerComboPop();
