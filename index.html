@@ -3904,9 +3904,9 @@
       // our internal speed unit at exactly 88 real mph (kmh = speed*2.1, mph = kmh*0.621371)
       const MPH_88_SPEED = 88 / (2.1 * 0.621371);
       const TIME_JUMP_SKIP = 20; // meters skipped forward by a Salto Temporale
-      // A beat of immunity as you come out of a jump, so the landing is survivable.
-      // Deliberately kept off `invulnerable`, which is what drives the rainbow car
-      // flash and the 3-2-1 countdown: this one protects silently.
+      // Immunity across a jump and for a beat after it, so the +20 m landing is
+      // survivable. Deliberately kept off `invulnerable`, which is what drives the
+      // rainbow car flash and the 3-2-1 countdown: this one protects silently.
       const JUMP_GRACE = 1;
       let jumpGrace = 0;
 
@@ -4067,7 +4067,10 @@
 
           distance += speed * dt;
           score += dt; // 1 point per second survived
-          if (jumpGrace > 0) jumpGrace = Math.max(0, jumpGrace - dt);
+          // Held topped up for the whole jump — the +20 m skip lands mid-sequence
+          // and must not drop you onto an obstacle — then released a beat later.
+          if (timeJumpSeq >= 0) jumpGrace = JUMP_GRACE;
+          else if (jumpGrace > 0) jumpGrace = Math.max(0, jumpGrace - dt);
 
           // a combo lapses if no grape is taken in time
           if (combo > 0) {
@@ -4149,7 +4152,6 @@
             }
             if (timeJumpSeq > 1.2) {
               timeJumpSeq = -1;
-              jumpGrace = JUMP_GRACE; // coming out of the jump, silently protected
               arcs.forEach((a) => (a.visible = false));
               burstSprite.visible = false;
               burstSprite.material.opacity = 0;
