@@ -306,12 +306,12 @@
         font-family: var(--font-display);
         font-size: 15px;
         font-weight: 900;
-        letter-spacing: 0.04em;
-        color: #eafaff;
+        letter-spacing: 0.1em;
+        /* glow tracks the cycling colour, the same trick the invincibility text uses */
         text-shadow:
-          0 0 8px rgba(255, 255, 255, 0.9),
-          0 0 20px rgba(53, 208, 255, 0.95),
-          0 0 40px rgba(53, 208, 255, 0.5);
+          0 0 8px currentColor,
+          0 0 22px currentColor,
+          0 0 42px rgba(0, 0, 0, 0.6);
         opacity: 0;
         pointer-events: none;
         white-space: nowrap;
@@ -319,7 +319,9 @@
         will-change: transform, opacity;
       }
       .floater.show {
-        animation: floatUp 0.9s ease-out forwards;
+        animation:
+          floatUp 0.9s ease-out forwards,
+          rainbowText 1.2s linear infinite;
       }
       @keyframes floatUp {
         0% {
@@ -3173,7 +3175,7 @@
             ["🥤", "LATTINA · +1 VITA", "Una vita extra, fino a un massimo di 6. Se hai già tutte le vite non viene raccolta."],
             ["⚛", "MR. FUSION · +50 KM/H", "Puoi tenerne fino a 3. Premi SPAZIO per usarne uno e avere una spinta di 50 km/h."],
             ["⚡", "88 MPH · SALTO TEMPORALE", "Superando gli 88 mph parte il salto temporale: ti teletrasporta 20 metri più avanti."],
-            ["💨", "SFIORATA · +2 PT", "Passa rasente a una roccia o a un’auto senza toccarla e guadagni 2 punti."],
+            ["💨", "CLOSE CALL! · +2 PT", "Passa rasente a una roccia o a un’auto senza toccarla e guadagni 2 punti."],
             ["🪨", "OSTACOLI", "Le rocce rosa ti fanno perdere una vita e azzerano la combo. Evitale."],
             ["🚗", "TRAFFICO", "Le auto più lente sono ostacoli come le rocce. Sorpassale."],
             ["🛣️", "FUORIPISTA", "Fuori dall'asfalto rallenti molto. Resta in carreggiata, soprattutto in curva."],
@@ -3230,7 +3232,7 @@
             ["🥤", "SODA CAN · +1 LIFE", "One extra life, up to a maximum of 6. If your lives are full it is left on the road."],
             ["⚛", "MR. FUSION · +50 KM/H", "Hold up to 3. Press SPACE to spend one for a 50 km/h boost."],
             ["⚡", "88 MPH · TIME JUMP", "Cross 88 mph and the time jump fires, teleporting you 20 metres ahead."],
-            ["💨", "NEAR MISS · +2 PTS", "Squeeze past a rock or a car without touching it and you score 2 points."],
+            ["💨", "CLOSE CALL! · +2 PTS", "Squeeze past a rock or a car without touching it and you score 2 points."],
             ["🪨", "OBSTACLES", "Pink rocks cost you a life and reset your combo. Dodge them."],
             ["🚗", "TRAFFIC", "Slower cars hurt just like rocks. Overtake them."],
             ["🛣️", "OFF-ROAD", "Off the asphalt you slow right down. Stay on the road, especially through bends."],
@@ -3845,7 +3847,7 @@
       // Awarded once, as an obstacle slips behind the car's nose.
       function awardNearMiss(worldPos) {
         score += NEAR_MISS_POINTS;
-        spawnFloater(worldPos, `+${NEAR_MISS_POINTS}pt`);
+        spawnFloater(worldPos, `CLOSE CALL! +${NEAR_MISS_POINTS}`);
         Sound.playNearMiss();
       }
 
@@ -3902,6 +3904,11 @@
       // our internal speed unit at exactly 88 real mph (kmh = speed*2.1, mph = kmh*0.621371)
       const MPH_88_SPEED = 88 / (2.1 * 0.621371);
       const TIME_JUMP_SKIP = 20; // meters skipped forward by a Salto Temporale
+      // A beat of immunity as you come out of a jump, so the landing is survivable.
+      // Deliberately kept off `invulnerable`, which is what drives the rainbow car
+      // flash and the 3-2-1 countdown: this one protects silently.
+      const JUMP_GRACE = 1;
+      let jumpGrace = 0;
 
       function currentMaxSpeed() {
         return Math.min(58 + distance * 0.012, 108);
@@ -3968,6 +3975,7 @@
         crashShake = 0;
         crashCooldown = 0;
         invulnerable = 0;
+        jumpGrace = 0;
         lives = START_LIVES;
         combo = 0;
         comboTimer = 0;
@@ -4059,6 +4067,7 @@
 
           distance += speed * dt;
           score += dt; // 1 point per second survived
+          if (jumpGrace > 0) jumpGrace = Math.max(0, jumpGrace - dt);
 
           // a combo lapses if no grape is taken in time
           if (combo > 0) {
@@ -4140,6 +4149,7 @@
             }
             if (timeJumpSeq > 1.2) {
               timeJumpSeq = -1;
+              jumpGrace = JUMP_GRACE; // coming out of the jump, silently protected
               arcs.forEach((a) => (a.visible = false));
               burstSprite.visible = false;
               burstSprite.material.opacity = 0;
@@ -4186,8 +4196,8 @@
               Math.abs(o.mesh.position.x - car.position.x) < 1.25
             ) {
               o.hit = true;
-              if (invulnerable > 0) {
-                // pizza power-up: smash straight through, no speed loss
+              if (invulnerable > 0 || jumpGrace > 0) {
+                // pizza power-up, or the post-jump grace: pass straight through
                 resetObstacle(o, SPAWN_FAR - Math.random() * 60);
               } else {
                 triggerCrash();
@@ -4218,7 +4228,7 @@
               Math.abs(t.mesh.position.x - car.position.x) < 1.35
             ) {
               t.hit = true;
-              if (invulnerable > 0) {
+              if (invulnerable > 0 || jumpGrace > 0) {
                 resetTrafficCar(t, SPAWN_FAR - Math.random() * 80);
               } else {
                 triggerCrash();

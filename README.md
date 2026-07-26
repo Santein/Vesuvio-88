@@ -29,7 +29,7 @@ Touch controls appear automatically on phones and tablets.
 - Pizza stacks: 10s fresh, +5s if taken while already invincible, with a 3-2-1 countdown
 - Collectible Mr. Fusion reactors (hold up to 3) used as a NOS-style boost
 - 88 mph "Salto Temporale" — Back to the Future style time jump with a +20 m skip
-- Near misses: squeeze past a rock or a car without touching it for +2 points
+- Close call: squeeze past a rock or a car without touching it for +2 points
 - Speed lines at high velocity, and a hyperspace star warp through every time jump
 - Fully procedural audio (Web Audio API): engine, tyre scrub, three synthwave tracks
 - Italian / English, with separate music and SFX volume sliders
