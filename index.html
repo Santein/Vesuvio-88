@@ -627,6 +627,26 @@
         color: rgba(210, 232, 255, 0.5);
         text-align: center;
       }
+      /* any run can be signed, not just a placing one */
+      #leave-mark {
+        margin-top: 18px;
+        padding: 11px 40px;
+        font-family: var(--font-display);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.2em;
+        color: var(--gold);
+        background: rgba(255, 224, 102, 0.08);
+        border: 1.5px solid rgba(255, 224, 102, 0.65);
+        cursor: pointer;
+        text-shadow: 0 0 12px rgba(255, 224, 102, 0.75);
+        box-shadow: 0 0 20px rgba(255, 224, 102, 0.22);
+        clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+      }
+      #leave-mark.hidden {
+        display: none;
+      }
+
       #initials-confirm {
         margin-top: 22px;
         padding: 12px 46px;
@@ -1508,6 +1528,7 @@
       <div class="subtitle" id="gameover-score">0 PT</div>
       <div id="gameover-rank"></div>
       <div class="leaderboard" id="gameover-leaderboard"></div>
+      <button id="leave-mark" class="hidden">LASCIA IL SEGNO</button>
       <div class="divider"></div>
       <div class="blink" id="gameover-blink">ENTER · SPAZIO · START PER RIPROVARE</div>
     </div>
@@ -2948,7 +2969,7 @@
           [infoOverlayEl, boardOverlayEl].forEach((o) => closePanel(o));
           closeSettings();
         }
-        if (settingsOpen || e.target === boardSearchEl) return; // panels swallow gameplay keys
+        if (settingsOpen || e.target === boardSearchEl || e.target === leaveMarkEl) return; // these swallow gameplay keys
         if (e.code === "Enter") startGame();
         if (e.code === "Space" && !e.repeat) {
           e.preventDefault();
@@ -2964,8 +2985,13 @@
         if (e.code === "ShiftLeft" || e.code === "ShiftRight") input.drift = false;
       });
 
+      const leaveMarkEl = document.getElementById("leave-mark");
       document.getElementById("center-overlay").addEventListener("pointerdown", startGame);
       document.getElementById("gameover-overlay").addEventListener("pointerdown", startGame);
+      leaveMarkEl.addEventListener("pointerdown", (e) => {
+        e.stopPropagation(); // otherwise the overlay behind it restarts the run
+        openInitialsEntry(lastFinalScore, false);
+      });
 
 
       function bindHold(id, onDown, onUp) {
@@ -3146,6 +3172,7 @@
           fusion: "⚛ MR. FUSION",
           extraLife: "🥤 +1 VITA",
           newRecord: "NUOVO RECORD",
+          leaveMark: "LASCIA IL SEGNO",
           initialsHelp: "scrivi le tue iniziali · ↑↓ cambia · INVIO conferma",
           confirm: "CONFERMA",
           rankLine: (place, pts) => `${place}° POSTO · ${pts} PT`,
@@ -3203,6 +3230,7 @@
           fusion: "⚛ MR. FUSION",
           extraLife: "🥤 +1 LIFE",
           newRecord: "NEW HIGH SCORE",
+          leaveMark: "LEAVE YOUR MARK",
           initialsHelp: "type your initials · ↑↓ change · ENTER to confirm",
           confirm: "CONFIRM",
           rankLine: (place, pts) => `RANK ${place} · ${pts} PT`,
@@ -3456,6 +3484,10 @@
       let initialsLetters = ["A", "A", "A"];
       let initialsIndex = 0;
       let initialsPendingScore = 0;
+      let initialsFromRecord = true; // record runs open it automatically, the button does not
+      let markLeft = false; // one signature per run
+      let lastFinalScore = 0;
+      let lastGlobalRank = null;
 
       function renderInitials() {
         initialSlotEls.forEach((el, i) => {
@@ -3464,16 +3496,27 @@
         });
       }
 
-      function openInitialsEntry(finalScore) {
+      // fromRecord: a placing run opens this on its own; the Leave your mark
+      // button opens it for any run, so the wording has to differ.
+      function openInitialsEntry(finalScore, fromRecord) {
         initialsActive = true;
+        initialsFromRecord = fromRecord;
         initialsPendingScore = finalScore;
         initialsLetters = ["A", "A", "A"];
         initialsIndex = 0;
-        // preview which place they've earned
-        const list = loadLeaderboard();
-        const place = list.filter((e) => e.score >= finalScore).length + 1;
-        document.getElementById("initials-rank").textContent = t("rankLine")(place, finalScore);
+        document.getElementById("initials-title").textContent = fromRecord ? t("newRecord") : t("leaveMark");
+        if (fromRecord) {
+          // preview which place they've earned
+          const list = loadLeaderboard();
+          const place = list.filter((e) => e.score >= finalScore).length + 1;
+          document.getElementById("initials-rank").textContent = t("rankLine")(place, finalScore);
+        } else {
+          // off the board, so the top-5 place would be meaningless: show the global one
+          document.getElementById("initials-rank").textContent =
+            lastGlobalRank === null ? `${finalScore} PT` : t("globalRank")(lastGlobalRank);
+        }
         renderInitials();
+        document.getElementById("gameover-overlay").classList.add("hidden");
         initialsOverlayEl.classList.remove("hidden");
       }
 
@@ -3482,6 +3525,7 @@
         initialsActive = false;
         initialsOverlayEl.classList.add("hidden");
         const name = initialsLetters.join("");
+        markLeft = true;
         const index = submitScore(name, initialsPendingScore);
         renderLeaderboard(document.getElementById("start-leaderboard"));
         recordValueEl.textContent = t("record")(cachedBoard[0]?.score || 0);
@@ -3564,7 +3608,8 @@
         document.getElementById("pad-toast").textContent = t("padConnected");
         document.getElementById("fusion-banner").textContent = t("fusion");
         document.getElementById("life-banner").textContent = t("extraLife");
-        document.getElementById("initials-title").textContent = t("newRecord");
+        document.getElementById("initials-title").textContent = initialsFromRecord ? t("newRecord") : t("leaveMark");
+        leaveMarkEl.textContent = t("leaveMark");
         document.getElementById("initials-help").textContent = t("initialsHelp");
         document.getElementById("initials-confirm").textContent = t("confirm");
         document.getElementById("author").innerHTML =
@@ -3934,8 +3979,9 @@
         Sound.playGameOver();
         updateWarpFx(0, 0, 0); // the loop stops updating them, so clear the streaks here
         const finalScore = Math.floor(score);
+        markLeft = false; // a fresh run may be signed again
         // a placing score earns the arcade initials prompt first
-        if (qualifiesForLeaderboard(finalScore)) openInitialsEntry(finalScore);
+        if (qualifiesForLeaderboard(finalScore)) openInitialsEntry(finalScore, true);
         else showGameOverScreen(finalScore, -1);
       }
 
@@ -3946,11 +3992,16 @@
         document.getElementById("gameover-score").textContent = `${finalScore} PT`;
         renderLeaderboard(document.getElementById("gameover-leaderboard"), highlightIndex);
 
+        lastFinalScore = finalScore;
+        lastGlobalRank = null;
+        leaveMarkEl.classList.toggle("hidden", markLeft || finalScore <= 0);
+
         const token = ++gameOverToken;
         const rankEl = document.getElementById("gameover-rank");
         rankEl.textContent = t("rankPending");
         fetchGlobalRank(finalScore).then((rank) => {
           if (token !== gameOverToken) return;
+          lastGlobalRank = rank;
           rankEl.textContent = rank === null ? t("rankOffline") : t("globalRank")(rank);
         });
 
